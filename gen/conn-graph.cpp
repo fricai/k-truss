@@ -1,4 +1,4 @@
-#include "bits/stdc++.h"
+#include <iostream>
 #include "jngen/graph.h"
 
 using namespace std;

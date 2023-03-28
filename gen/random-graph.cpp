@@ -1,4 +1,7 @@
-#include "bits/stdc++.h"
+#include <iostream>
+#include <random>
+#include <set>
+
 using namespace std;
 
 #define rep(i, a, b) for (auto i = (a); i < (b); ++i)
@@ -24,7 +27,7 @@ int main(int argc, char** argv) {
             x = dis(rng);
             y = dis(rng);
             if (x > y) swap(x, y);
-        } while (x == y || s.contains({x, y}));
+        } while (x == y || s.count({x, y}));
         g[x].push_back(y);
         g[y].push_back(x);
         s.insert({x, y});

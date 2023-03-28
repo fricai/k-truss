@@ -1,4 +1,6 @@
-#include "bits/stdc++.h"
+#include <iostream>
+#include <vector>
+#include <fstream>
 
 #define rep(i, a, b) for (auto i{a}; i < (b); ++i)
 
