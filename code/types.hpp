@@ -3,6 +3,8 @@
 #include <array>
 #include <vector>
 
+#include "mpi.h"
+
 using vertex_t = int;
 using edge_t = std::array<vertex_t, 2>;
 using triangle_t = std::array<vertex_t, 3>;
