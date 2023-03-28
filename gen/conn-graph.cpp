@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cassert>
 #include "jngen/graph.h"
 
 using namespace std;
