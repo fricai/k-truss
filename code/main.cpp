@@ -25,6 +25,8 @@ void graph_t::init() {
     local_init();
 }
 
+void graph_t::local_init() {}
+
 void graph_t::create_mmap() {
     int fd = open(args.inputpath.data(), O_RDONLY);
 
@@ -173,6 +175,8 @@ void graph_t::init_triangles() {
         inc_tri[p].assign(dodg[p].size(), {});
     }
 
+    std::vector<std::vector<triangle_t>> queued_triangles(mpi_world_size);
+
     for (auto p : owned_vertices) {
         rep(idx_q_, 0u, dodg[p].size()) {
             rep(idx_r_, idx_q_ + 1, dodg[p].size()) {
@@ -196,10 +200,40 @@ void graph_t::init_triangles() {
 
                     inc_tri[p][idx_q].push_back(r);
                     inc_tri[p][idx_r].push_back(q);
+
+                    if (owner[q] != mpi_rank) {
+                        queued_triangles[owner[q]].push_back({q, r, p});
+                    }
                 }
             }
         }
     }
+
+    std::vector<int> send_cnt(mpi_world_size), recv_cnt(mpi_world_size);
+
+    rep(i, 0, mpi_world_size) cnt[i] = queued_triangles[i].size();
+    MPI_Alltoall(send_cnt.data(), 1, MPI_INT, recv_cnt.data(), 1, MPI_INT,
+                 MPI_COMM_WORLD);
+
+    std::vector<int> recv_offsets(mpi_world_size + 1),
+        send_offsets(mpi_world_size + 1);
+    rep(i, 0, mpi_world_size) {
+        recv_offsets[i + 1] = recv_offsets[i] + recv_cnt[i];
+        send_offsets[i + 1] = send_offsets[i] + send_cnt[i];
+    }
+
+    std::vector<triangle_t> send_scratch(send_offsets[mpi_world_size]);
+    rep(i, 0, mpi_world_size) {
+        std::copy_n(queued_triangles[i].begin(), send_cnt[i],
+                    send_scratch.begin() + send_offsets[i]);
+        clear_vector(queued_triangles[i]);
+    }
+
+    std::vector<triangle_t> recv_triangles(recv_offsets[mpi_world_size]);
+
+    MPI_Alltoallv(send_triangles.data(), send_cnt.data(), send_offsets.data(),
+                  mpi_array_int_3, recv_triangles.data(), recv_cnt.data(),
+                  recv_offsets.data(), mpi_array_int_3);
 
     for (auto p : owned_vertices) {
         rep(idx, 0u, inc_tri[p].size()) {
@@ -212,9 +246,7 @@ void graph_t::init_triangles() {
     }
 }
 
-void compute_truss(int k1, int k2) {
-
-}
+void graph_t::compute_truss(int k1, int k2) {}
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
