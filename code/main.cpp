@@ -34,11 +34,14 @@ void graph_t::local_init() {
 
     for (auto u : owned_vertices) {
         bucket_iter[u].resize(dodg[u].size());
+        dead_triangle[u].resize(dodg[u].size());
 
         rep(idx_v, 0u, dodg[u].size()) {
             const auto tau = std::min(supp[u][idx_v], k2);
             bucket[tau].push_front({u, idx_v});
             bucket_iter[u][idx_v] = bucket[tau].begin();
+
+            dead_triangle[u][idx_v].assign(inc_tri[u][idx_v].size(), false);
         }
     }
 }
@@ -47,14 +50,77 @@ void graph_t::compute_truss() {
     assert(mpi_world_size == 1);
 
     for (int k = k1; k <= k2; ++k) {
-        do {
+        /*
+        auto decrease_supp = [&](int u, int v) {
+            auto idx_v = get_edge_idx(u, v);
+
+            auto& supp_val = supp[u][idx_v];
+            if (supp_val >= k) {
+                // no need to move stuff
+                --supp_val;
+
+                // NOTE: not parallel friendly
+                bucket[supp_val].splice(bucket[supp_val].end(),
+                                        bucket[supp_val + 1],
+                                        bucket_iter[u][idx_v]);
+                // move node from supp_val + 1 to supp_val
+            }
+        };
+        */
+
+        while (true) {
             std::list<edge_idx_t> cur;
             cur.splice(cur.end(), bucket[k - 1]);
             assert(bucket[k - 1].empty());
             if (cur.empty()) break;
 
+            // for (auto [u, idx_v] : cur) bucket_iter[u][idx_v] = nullptr;
 
-        } while (true);
+            // first we mark dead triangles
+            for (auto [u, idx_v] : cur) {
+                const auto v = dodg[u][idx_v];
+                assert(rnk[u] > rnk[v]);
+                rep(idx_w, 0u, inc_tri[u][idx_v].size()) {
+                    if (dead_triangle[u][idx_v][idx_w]) continue;
+                    const auto w = inc_tri[u][idx_v][idx_w];
+                    // u -> v
+                    if (rnk[w] > rnk[u]) {
+                        auto tmp = [&](vertex_t x) -> bool {
+                            // have to query from owner[w]
+                            const auto idx_x = get_edge_idx(w, x);
+                            return supp[w][idx_x] <= k;
+                        };
+                        dead_triangle[u][idx_v][idx_w] = tmp(u) or tmp(v);
+
+                        // rather than marking it dead
+                        // maybe just erase it from the vector?
+                    }
+                }
+            }
+
+            // barrier here
+
+            for (auto [u, idx_v] : cur) {
+                const auto v = dodg[u][idx_v];
+                rep(idx_w, 0u, inc_tri[u][idx_v].size()) {
+                    if (dead_triangle[u][idx_v][idx_w]) continue;
+                    // decrement edge {u, w} and {v, w}
+                    const auto w = inc_tri[u][idx_v][idx_w];
+                    auto tmp = [&](int p, int q, int r) {
+                        if (rnk[p] < rnk[q]) std::swap(p, q);
+                        const auto idx_q = get_edge_idx(p, q);
+                        --supp[p][idx_q];
+                        const auto idx_r = get_triangle_idx(p, idx_q, r);
+                        dead_triangle[p][idx_q][idx_r] = true;
+                    };
+                    tmp(w, u, v);
+                    tmp(w, v, u);
+                }
+                // delete edge (u, v)
+            }
+
+            fin_bucket[k - 1].splice(fin_bucket[k - 1].end(), cur);
+        }
     }
 }
 
