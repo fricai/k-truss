@@ -31,8 +31,8 @@ struct graph_t {
     void init();
 
     void init_triangles();
-
     void compute_truss(supp_t k1, supp_t k2);
+    void local_init();
 
     idx_t get_edge_idx(vertex_t x, vertex_t y);
     idx_t get_triangle_idx(vertex_t x, idx_t idx_y, vertex_t z);

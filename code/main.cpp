@@ -131,31 +131,6 @@ void graph_t::read_owned_graph(std::ifstream& gf) {
     }
 }
 
-// must be called after read_header
-void graph_t::read_complete_graph(std::ifstream& gf) {
-    gf.seekg(4 + 4);
-
-    dodg.resize(n);
-
-    std::vector<uint32_t> scratch;
-    scratch.reserve(n);
-
-    rep(u, 0, n) {
-        uint32_t id, deg;
-        gf.read((char*)&id, 4);
-        gf.read((char*)&deg, 4);
-        assert(id == (uint32_t)u);
-        assert(deg == (rnk[u] >> 32));
-
-        scratch.resize(deg);
-        gf.read((char*)scratch.data(), 4 * deg);
-
-        for (auto v : scratch)
-            if (rnk[u] < rnk[v]) dodg[u].push_back(v);
-        assert(std::is_sorted(dodg[u].begin(), dodg[u].end()));
-    }
-}
-
 void graph_t::init_triangles() {
     /*
      * inc_tri[p][idx_q] stores the triangle (p, q, r)
@@ -207,8 +182,8 @@ void graph_t::init_triangles() {
     }
 
     std::vector<int> send_cnt(mpi_world_size), recv_cnt(mpi_world_size);
+    rep(i, 0, mpi_world_size) send_cnt[i] = queued_triangles[i].size();
 
-    rep(i, 0, mpi_world_size) cnt[i] = queued_triangles[i].size();
     MPI_Alltoall(send_cnt.data(), 1, MPI_INT, recv_cnt.data(), 1, MPI_INT,
                  MPI_COMM_WORLD);
 
@@ -230,7 +205,7 @@ void graph_t::init_triangles() {
 
     MPI_Alltoallv(send_triangles.data(), send_cnt.data(), send_offsets.data(),
                   mpi_array_int_3, recv_triangles.data(), recv_cnt.data(),
-                  recv_offsets.data(), mpi_array_int_3);
+                  recv_offsets.data(), mpi_array_int_3, MPI_COMM_WORLD);
 
     clear_vector(send_triangles);
 
