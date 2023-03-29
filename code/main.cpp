@@ -195,14 +195,11 @@ void graph_t::init_triangles() {
                 // if q -> r edge exists
 
                 if (edge_oracle(q, r)) {
-                    ++supp[p][idx_q];
-                    ++supp[p][idx_r];
-
                     inc_tri[p][idx_q].push_back(r);
                     inc_tri[p][idx_r].push_back(q);
 
                     if (owner[q] != mpi_rank) {
-                        queued_triangles[owner[q]].push_back({q, r, p});
+                        queued_triangles[owner[q]].push_back({{q, r, p}});
                     }
                 }
             }
@@ -222,10 +219,10 @@ void graph_t::init_triangles() {
         send_offsets[i + 1] = send_offsets[i] + send_cnt[i];
     }
 
-    std::vector<triangle_t> send_scratch(send_offsets[mpi_world_size]);
+    std::vector<triangle_t> send_triangles(send_offsets[mpi_world_size]);
     rep(i, 0, mpi_world_size) {
         std::copy_n(queued_triangles[i].begin(), send_cnt[i],
-                    send_scratch.begin() + send_offsets[i]);
+                    send_triangles.begin() + send_offsets[i]);
         clear_vector(queued_triangles[i]);
     }
 
@@ -235,6 +232,13 @@ void graph_t::init_triangles() {
                   mpi_array_int_3, recv_triangles.data(), recv_cnt.data(),
                   recv_offsets.data(), mpi_array_int_3);
 
+    clear_vector(send_triangles);
+
+    for (auto [q, r, p] : recv_triangles) {
+        const auto idx_r = get_edge_idx(q, r);
+        inc_tri[q][idx_r].push_back(p);
+    }
+
     for (auto p : owned_vertices) {
         rep(idx, 0u, inc_tri[p].size()) {
             std::sort(inc_tri[p][idx].begin(), inc_tri[p][idx].end());
@@ -242,6 +246,8 @@ void graph_t::init_triangles() {
             /*
              * Should I keep this or not?
              */
+
+            supp[p][idx] = (int)inc_tri[p][idx].size();
         }
     }
 }
