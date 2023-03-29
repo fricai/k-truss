@@ -31,7 +31,7 @@ struct graph_t {
     void init();
 
     void init_triangles();
-    void compute_truss(supp_t k1, supp_t k2);
+    void compute_truss();
     void local_init();
 
     idx_t get_edge_idx(vertex_t x, vertex_t y);
@@ -44,5 +44,11 @@ struct graph_t {
 
     std::vector<std::vector<supp_t>> supp;
     std::vector<std::vector<std::vector<vertex_t>>> inc_tri;
+
+    std::vector<std::list<edge_idx_t>> bucket;
+    std::vector<std::vector<std::list<edge_idx_t>::iterator>> bucket_iter;
+    std::vector<std::vector<bool>> dead_triangle;
+
+    supp_t k1, k2;
 };
 

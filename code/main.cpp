@@ -20,12 +20,43 @@
 int mpi_world_size, mpi_rank;
 
 void graph_t::init() {
+    k1 = args.startk;
+    k2 = args.endk;
     create_mmap();
     init_triangles();
     local_init();
 }
 
-void graph_t::local_init() {}
+void graph_t::local_init() {
+    bucket.resize(k2 + 1);
+    bucket_iter.resize(n);
+    dead_triangle.resize(n);
+
+    for (auto u : owned_vertices) {
+        bucket_iter[u].resize(dodg[u].size());
+
+        rep(idx_v, 0u, dodg[u].size()) {
+            const auto tau = std::min(supp[u][idx_v], k2);
+            bucket[tau].push_front({u, idx_v});
+            bucket_iter[u][idx_v] = bucket[tau].begin();
+        }
+    }
+}
+
+void graph_t::compute_truss() {
+    assert(mpi_world_size == 1);
+
+    for (int k = k1; k <= k2; ++k) {
+        do {
+            std::list<edge_idx_t> cur;
+            cur.splice(cur.end(), bucket[k - 1]);
+            assert(bucket[k - 1].empty());
+            if (cur.empty()) break;
+
+
+        } while (true);
+    }
+}
 
 void graph_t::create_mmap() {
     int fd = open(args.inputpath.data(), O_RDONLY);
@@ -226,8 +257,6 @@ void graph_t::init_triangles() {
         }
     }
 }
-
-void graph_t::compute_truss(int k1, int k2) {}
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
