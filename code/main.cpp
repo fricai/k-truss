@@ -7,7 +7,7 @@
 #include <cassert>
 #include <chrono>
 #include <iostream>
-#include <queue>
+#include <numeric>
 #include <thread>
 #include <vector>
 
@@ -291,20 +291,32 @@ void graph_t::assign_owners() {
     std::vector<I> load(n);
     rep(u, 0, n) load[u] = (rnk[u] >> 32) * (rnk[u] >> 32);
 
-    std::priority_queue<std::pair<I, int>> worlds;
-    rep(i, 0, mpi_world_size) worlds.push({0, i});
+    // do static partioning instead
+    // gives you locality
+
+    I tot = 0;
+    rep(u, 0, n) tot += load[u];
 
     owner.resize(n);
-    rep(u, 0, n) {
-        auto [ld, id] = worlds.top();
-        worlds.pop();
 
-        ld -= load[u];
-        owner[u] = id;
+    int l = 0, r = 0;
+    rep(i, 0, mpi_world_size) {
+        const auto target = tot / (mpi_world_size - i);
+        I cur_sum = 0;
+        while (cur_sum < target) {
+            assert(r < n);
+            cur_sum += load[r];
+            ++r;
+        }
+        rep(j, l, r) owner[j] = i;
 
-        if (id == mpi_rank) owned_vertices.push_back(u);
+        if (i == mpi_rank) {
+            owned_vertices.resize(r - l);
+            std::iota(owned_vertices.begin(), owned_vertices.end(), l);
+        }
 
-        worlds.push({ld, id});
+        l = r;
+        tot -= cur_sum;
     }
 }
 
