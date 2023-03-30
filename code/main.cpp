@@ -54,8 +54,6 @@ void graph_t::local_init() {
 }
 
 void graph_t::compute_truss() {
-    // assert(mpi_world_size == 1);
-
     fin_bucket.resize(k2 + 1);
 
     std::list<edge_idx_t> cur;
@@ -79,40 +77,27 @@ void graph_t::compute_truss() {
 
             cur.splice(cur.end(), bucket[k - 1]);
 
+            // ensures the triangle deletions are mutually exclusive
+
 #define F(x) (supp[w][get_edge_idx(w, x)] < k)
-            // first we mark dead triangles
+            // we mark dead triangles
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
-                assert(rnk[u] < rnk[v]);
-
                 // u -> v edge
 
                 rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
                     if (dead_triangle[u][idx_v][tri_idx_w]) continue;
-
                     const auto w = inc_tri[u][idx_v][tri_idx_w];
-
-                    // u -> v
                     if (rnk[w] < rnk[u]) {
-                        // w -> u edge
-                        //
                         // w -> u -> v
-                        //  \-------/
-
-                        if (owner[w] == mpi_rank) {
-                            // local
+                        if (owner[w] == mpi_rank)  // local
                             dead_triangle[u][idx_v][tri_idx_w] = F(u) or F(v);
-                        } else {
+                        else
                             disjoint_queries[owner[w]].push_back({{w, u, v}});
-                        }
-
-                        // need to make a send to just owner of w
-                    } else if (rnk[w] < rnk[v]) {
-                        // this is completely local so no changed needed
-                        const auto edge_idx_w = get_edge_idx(u, w);
+                    } else if (rnk[w] < rnk[v])
+                        // u -> w -> v
                         dead_triangle[u][idx_v][tri_idx_w] =
-                            supp[u][edge_idx_w] < k;
-                    }
+                            supp[u][get_edge_idx(u, w)] < k;
                 }
             }
 
@@ -144,36 +129,15 @@ void graph_t::compute_truss() {
                           send_cnts.data(), send_offsets.data(), MPI_INT8_T,
                           MPI_COMM_WORLD);
 
-            // barrier here, don't think we need an explicit barrier
             int ctr = 0;
             for (auto [u, idx_v] : cur) {
-                const auto v = dodg[u][idx_v];
-                assert(rnk[u] < rnk[v]);
-
                 // u -> v edge
-
                 rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
                     if (dead_triangle[u][idx_v][tri_idx_w]) continue;
-
                     const auto w = inc_tri[u][idx_v][tri_idx_w];
-
-                    // u -> v
-                    if (rnk[w] < rnk[u]) {
-                        // w -> u edge
-                        //
-                        // w -> u -> v
-                        //  \-------/
-
-                        if (owner[w] == mpi_rank) {
-                            // local
-                        } else {
-                            dead_triangle[u][idx_v][tri_idx_w] = answers[ctr];
-                            ++ctr;
-                        }
-
-                        // need to make a send to just owner of w
-                    } else if (rnk[w] < rnk[v]) {
-                        // local
+                    if (rnk[w] < rnk[u] and owner[w] != mpi_rank) {
+                        dead_triangle[u][idx_v][tri_idx_w] = answers[ctr];
+                        ++ctr;
                     }
                 }
             }
@@ -181,11 +145,7 @@ void graph_t::compute_truss() {
 
             const auto update_triangle = [&](int p, int q, int r) {
                 const auto idx_q = get_edge_idx(p, q);
-
-                assert(idx_q < (int)supp[p].size());
-
                 auto& supp_val = supp[p][idx_q];
-
                 if (supp_val >= k) {
                     --supp_val;
                     if (supp_val < k2) {
@@ -196,23 +156,18 @@ void graph_t::compute_truss() {
                 }
 
                 const auto idx_r = get_triangle_idx(p, idx_q, r);
-                assert(idx_r < (idx_t)dead_triangle[p][idx_q].size());
-
                 dead_triangle[p][idx_q][idx_r] = true;
             };
 
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
-
                 rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
                     if (dead_triangle[u][idx_v][tri_idx_w]) continue;
 
                     // decrement edge {u, w} and {v, w}
                     const auto w = inc_tri[u][idx_v][tri_idx_w];
                     auto tmp = [&](int p, int q, int r) {
-                        if (rnk[p] > rnk[q]) std::swap(p, q);
-                        // p -> q is the edge
-
+                        if (rnk[p] > rnk[q]) std::swap(p, q);  // p -> q
                         if (owner[p] == mpi_rank)
                             update_triangle(p, q, r);
                         else
@@ -221,7 +176,6 @@ void graph_t::compute_truss() {
                     tmp(w, u, v);
                     tmp(w, v, u);
                 }
-                // delete edge (u, v)
             }
 
             flatten_vector(disjoint_queries, send_buffer, send_cnts,
@@ -243,6 +197,7 @@ void graph_t::compute_truss() {
 
             for (auto [p, q, r] : recv_buffer) update_triangle(p, q, r);
 
+            // finalize these edges
             fin_bucket[k - 1].splice(fin_bucket[k - 1].end(), cur);
         }
     }
