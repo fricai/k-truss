@@ -1,2 +1,9 @@
 *.o
 **/compile_flags.txt
+
+data/
+
+gen/*
+!gen/*.cpp
+
+scratch/

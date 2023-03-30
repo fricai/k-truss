@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <iostream>
@@ -49,6 +50,7 @@ void graph_t::local_init() {
 void graph_t::compute_truss() {
     assert(mpi_world_size == 1);
 
+    fin_bucket.resize(k2 + 1);
     for (int k = k1; k <= k2; ++k) {
         /*
         auto decrease_supp = [&](int u, int v) {
@@ -109,7 +111,18 @@ void graph_t::compute_truss() {
                     auto tmp = [&](int p, int q, int r) {
                         if (rnk[p] < rnk[q]) std::swap(p, q);
                         const auto idx_q = get_edge_idx(p, q);
-                        --supp[p][idx_q];
+
+                        auto& supp_val = supp[p][idx_q];
+
+                        if (supp_val >= k) {
+                            --supp_val;
+                            if (supp_val < k2) {
+                                bucket[supp_val].splice(bucket[supp_val].end(),
+                                                        bucket[supp_val + 1],
+                                                        bucket_iter[u][idx_v]);
+                            }
+                        }
+
                         const auto idx_r = get_triangle_idx(p, idx_q, r);
                         dead_triangle[p][idx_q][idx_r] = true;
                     };
@@ -122,6 +135,8 @@ void graph_t::compute_truss() {
             fin_bucket[k - 1].splice(fin_bucket[k - 1].end(), cur);
         }
     }
+
+    fin_bucket[k2].splice(fin_bucket[k2].end(), bucket[k2]);
 }
 
 void graph_t::create_mmap() {
@@ -270,9 +285,7 @@ void graph_t::init_triangles() {
                     inc_tri[p][idx_q].push_back(r);
                     inc_tri[p][idx_r].push_back(q);
 
-                    if (owner[q] != mpi_rank) {
-                        queued_triangles[owner[q]].push_back({{q, r, p}});
-                    }
+                    queued_triangles[owner[q]].push_back({{q, r, p}});
                 }
             }
         }
@@ -352,7 +365,47 @@ int main(int argc, char** argv) {
     g.read_owned_graph(gf);
 
     g.init();
-    g.compute_truss(k1, k2);
+
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+
+    std::vector<triangle_t> tris;
+    for (auto p : g.owned_vertices) {
+        rep(idx_q, 0u, g.dodg[p].size()) {
+            const auto q = g.dodg[p][idx_q];
+
+            for (auto r : g.inc_tri[p][idx_q]) {
+                tris.push_back({q, p, r});
+                tris.push_back({p, q, r});
+            }
+        }
+    }
+
+    const int local_tri_cnt = tris.size();
+
+    // share to other people
+    std::vector<int> tri_cnt(mpi_world_size);
+    MPI_Gather(&local_tri_cnt, 1, MPI_INT, tri_cnt.data(), 1, MPI_INT, 0,
+               MPI_COMM_WORLD);
+
+    std::vector<int> tri_offset(mpi_world_size + 1);
+    rep(i, 0, mpi_world_size) tri_offset[i + 1] = tri_offset[i] + tri_cnt[i];
+
+    std::vector<triangle_t> final_tris(tri_offset[mpi_world_size]);
+    MPI_Gatherv(tris.data(), tris.size(), mpi_array_int_3, final_tris.data(),
+                tri_cnt.data(), tri_offset.data(), mpi_array_int_3, 0,
+                MPI_COMM_WORLD);
+
+    if (mpi_rank == 0) {
+        std::sort(final_tris.begin(), final_tris.end());
+        for (auto [u, v, w] : final_tris)
+            std::cout << u << ' ' << v << ' ' << w << '\n';
+    }
+
+    MPI_Finalize();
+
+    return 0;
+
+    g.compute_truss();
 
     MPI_Finalize();
 }

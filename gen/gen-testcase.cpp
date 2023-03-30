@@ -1,10 +1,11 @@
+#include <array>
+#include <cassert>
 #include <fstream>
 #include <iostream>
-#include <cassert>
 #include <queue>
-#include "jngen/graph.h"
 #include <stack>
-#include <array>
+
+#include "jngen/graph.h"
 
 using namespace std;
 
@@ -122,7 +123,8 @@ int main(int argc, char** argv) {
     std::ofstream truss_file(argv[6]);
     graph_file << n << ' ' << m << '\n';
     rep(u, 0, n) {
-        const auto neighbourhood = g.edges(u);
+        auto neighbourhood = g.edges(u);
+        sort(neighbourhood.begin(), neighbourhood.end());
 
         graph_file << u << ' ';
         graph_file << neighbourhood.size() << ' ';
@@ -134,12 +136,13 @@ int main(int argc, char** argv) {
     auto kte = vanilla_KTE(g, n, k2);
     for (auto p : kte) {
         int trussness = p.second < k1 ? k1 - 1 : p.second;
-        truss_file << p.first[0] << ' ' << p.first[1] << ' ' << trussness << '\n';
+        truss_file << p.first[0] << ' ' << p.first[1] << ' ' << trussness
+                   << '\n';
     }
 
     rep(u, 0, n) {
         const auto nbd = g.edges(u);
-        for (auto v : nbd) 
+        for (auto v : nbd)
             if (v > u and !kte.count(make_edge(u, v)))
                 truss_file << u << ' ' << v << ' ' << k2 << '\n';
     }
