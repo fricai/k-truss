@@ -129,15 +129,15 @@ void graph_t::compute_truss() {
                           send_cnts.data(), send_offsets.data(), MPI_INT8_T,
                           MPI_COMM_WORLD);
 
-            int ctr = 0;
+            std::vector<int> ctr(mpi_world_size);
             for (auto [u, idx_v] : cur) {
                 // u -> v edge
                 rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
                     if (dead_triangle[u][idx_v][tri_idx_w]) continue;
                     const auto w = inc_tri[u][idx_v][tri_idx_w];
                     if (rnk[w] < rnk[u] and owner[w] != mpi_rank) {
-                        dead_triangle[u][idx_v][tri_idx_w] = answers[ctr];
-                        ++ctr;
+                        dead_triangle[u][idx_v][tri_idx_w] =
+                            answers[send_offsets[owner[w]] + ctr[owner[w]]++];
                     }
                 }
             }
