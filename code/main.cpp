@@ -49,7 +49,7 @@ void graph_t::local_init() {
 }
 
 void graph_t::compute_truss() {
-    assert(mpi_world_size == 1);
+    //assert(mpi_world_size == 1);
 
     fin_bucket.resize(k2 + 1);
 
@@ -137,7 +137,7 @@ void graph_t::compute_truss() {
                           MPI_COMM_WORLD);
 
             // barrier here, don't think we need an explicit barrier
-            int ctr = 0;
+            std::vector<int> ctr;
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
                 assert(rnk[u] < rnk[v]);
@@ -159,8 +159,8 @@ void graph_t::compute_truss() {
                         // if (owner[w] == mpi_rank) {
                         //  local
                         //} else {
-                        dead_triangle[u][idx_v][tri_idx_w] = answers[ctr];
-                        ++ctr;
+                        dead_triangle[u][idx_v][tri_idx_w] =
+                            answers[send_offsets[owner[w]] + ctr[owner[w]]++];
                         //}
 
                         // need to make a send to just owner of w
