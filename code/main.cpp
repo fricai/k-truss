@@ -49,7 +49,7 @@ void graph_t::local_init() {
 }
 
 void graph_t::compute_truss() {
-    // assert(mpi_world_size == 1);
+    assert(mpi_world_size == 1);
 
     fin_bucket.resize(k2 + 1);
 
