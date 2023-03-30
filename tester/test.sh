@@ -7,7 +7,8 @@ mkdir -p scratch
 n=1000
 m=100000
 k1=1
-k2=3
+k2=20
+ranks=6
 
 gen_test=1
 
@@ -19,8 +20,7 @@ then
     ./gen/graph-to-bin ./scratch/header.dat ./scratch/graph.gra < ./scratch/graph.txt
 fi
 
-threads=1
-time mpirun -n $threads ./a3 --startk $k1 --endk $k2 --inputpath "./scratch/graph.gra" --headerpath "./scratch/header.dat" --outputpath "./scratch/_out" > ./scratch/computed-truss.txt
+time mpirun -n $ranks ./a3 --startk $k1 --endk $k2 --inputpath "./scratch/graph.gra" --headerpath "./scratch/header.dat" --outputpath "./scratch/_out" > ./scratch/computed-truss.txt
 
 diff --brief ./scratch/computed-truss.txt ./scratch/actual-truss.txt
 comp_value=$?
