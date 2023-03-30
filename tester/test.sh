@@ -1,12 +1,17 @@
 #!/bin/bash
 
-n=1000
-m=100000
+n=100
+m=1000
 k1=1
 k2=20
 ranks=6
 
-gen_test=0
+if [[ -z $1 ]]
+then
+    gen_test=0
+else
+    gen_test=$1
+fi
 
 if [[ $gen_test -eq 1 ]]
 then

@@ -150,7 +150,6 @@ void graph_t::compute_truss() {
                 const auto idx_r = get_triangle_idx(p, idx_q, r);
 
                 if (dead_triangle[p][idx_q][idx_r]) return;
-
                 dead_triangle[p][idx_q][idx_r] = true;
 
                 auto& supp_val = supp[p][idx_q];
