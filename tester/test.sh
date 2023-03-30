@@ -4,8 +4,8 @@ pwd
 
 mkdir -p scratch
 
-n=1000
-m=100000
+n=100
+m=1000
 k1=1
 k2=3
 
@@ -18,6 +18,8 @@ then
 
     ./gen/graph-to-bin ./scratch/header.dat ./scratch/graph.gra < ./scratch/graph.txt
 fi
+
+# cat ./scratch/graph.txt
 
 threads=1
 time mpirun -n $threads ./a3 --startk $k1 --endk $k2 --inputpath "./scratch/graph.gra" --headerpath "./scratch/header.dat" --outputpath "./scratch/_out" > ./scratch/computed-truss.txt

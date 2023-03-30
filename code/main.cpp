@@ -8,6 +8,7 @@
 #include <chrono>
 #include <iostream>
 #include <queue>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -53,14 +54,13 @@ void graph_t::compute_truss() {
     fin_bucket.resize(k2 + 1);
 
     std::list<edge_idx_t> cur;
+
     for (int k = k1; k <= k2; ++k) {
         while (!bucket[k - 1].empty()) {
-
             assert(cur.empty());
             cur.splice(cur.end(), bucket[k - 1]);
             assert(bucket[k - 1].empty());
             assert(!cur.empty());
-
 
             // first we mark dead triangles
             for (auto [u, idx_v] : cur) {
@@ -99,8 +99,38 @@ void graph_t::compute_truss() {
                     }
                 }
             }
+            // If we remove this, does the code still work?
 
             // barrier here
+
+            std::map<triangle_t, edge_t> to_delete;
+
+            for (auto [u, idx_v] : cur) {
+                const auto v = dodg[u][idx_v];
+
+                rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
+                    if (dead_triangle[u][idx_v][tri_idx_w]) continue;
+
+                    // decrement edge {u, w} and {v, w}
+                    const auto w = inc_tri[u][idx_v][tri_idx_w];
+                    auto tmp = [&](int p, int q, int r) {
+                        triangle_t br{{p, q, r}};
+                        std::sort(br.begin(), br.end());
+
+                        auto [it, inserted] =
+                            to_delete.insert({br, edge_t({u, v})});
+                        if (!inserted) {
+                            std::cerr << "Bad triangle: " << br << '\n';
+                            std::cerr << "Bad edge: " << u << ' ' << v << '\n';
+                            std::cerr << "Last edge: " << it->second << '\n';
+                            assert(0);
+                        }
+                    };
+                    tmp(w, u, v);
+                    // tmp(w, v, u);
+                }
+                // delete edge (u, v)
+            }
 
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
