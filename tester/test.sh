@@ -1,19 +1,18 @@
 #!/bin/bash
 
-pwd
-
-mkdir -p scratch
-
 n=1000
 m=100000
 k1=1
 k2=20
 ranks=6
 
-gen_test=1
+gen_test=0
 
 if [[ $gen_test -eq 1 ]]
 then
+    mkdir -p scratch
+    rm scratch/*
+
     time ./gen/gen-testcase $n $m $k1 $k2 ./scratch/graph.txt ./scratch/actual-truss.txt
     echo "Generated test data and correct result"
 
@@ -30,5 +29,4 @@ then
     echo "Testcase differs"
 else
     echo "Passed test"
-    rm ./scratch/*
 fi

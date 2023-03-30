@@ -144,7 +144,15 @@ void graph_t::compute_truss() {
 #undef F
 
             const auto update_triangle = [&](int p, int q, int r) {
+                assert(owner[p] == mpi_rank);
+
                 const auto idx_q = get_edge_idx(p, q);
+                const auto idx_r = get_triangle_idx(p, idx_q, r);
+
+                if (dead_triangle[p][idx_q][idx_r]) return;
+
+                dead_triangle[p][idx_q][idx_r] = true;
+
                 auto& supp_val = supp[p][idx_q];
                 if (supp_val >= k) {
                     --supp_val;
@@ -154,9 +162,6 @@ void graph_t::compute_truss() {
                                                 bucket_iter[p][idx_q]);
                     }
                 }
-
-                const auto idx_r = get_triangle_idx(p, idx_q, r);
-                dead_triangle[p][idx_q][idx_r] = true;
             };
 
             for (auto [u, idx_v] : cur) {
