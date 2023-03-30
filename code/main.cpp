@@ -51,51 +51,51 @@ void graph_t::compute_truss() {
     assert(mpi_world_size == 1);
 
     fin_bucket.resize(k2 + 1);
+
+    std::list<edge_idx_t> cur;
     for (int k = k1; k <= k2; ++k) {
-        /*
-        auto decrease_supp = [&](int u, int v) {
-            auto idx_v = get_edge_idx(u, v);
+        while (!bucket[k - 1].empty()) {
 
-            auto& supp_val = supp[u][idx_v];
-            if (supp_val >= k) {
-                // no need to move stuff
-                --supp_val;
-
-                // NOTE: not parallel friendly
-                bucket[supp_val].splice(bucket[supp_val].end(),
-                                        bucket[supp_val + 1],
-                                        bucket_iter[u][idx_v]);
-                // move node from supp_val + 1 to supp_val
-            }
-        };
-        */
-
-        while (true) {
-            std::list<edge_idx_t> cur;
+            assert(cur.empty());
             cur.splice(cur.end(), bucket[k - 1]);
             assert(bucket[k - 1].empty());
-            if (cur.empty()) break;
+            assert(!cur.empty());
 
-            // for (auto [u, idx_v] : cur) bucket_iter[u][idx_v] = nullptr;
 
             // first we mark dead triangles
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
-                assert(rnk[u] > rnk[v]);
-                rep(idx_w, 0u, inc_tri[u][idx_v].size()) {
-                    if (dead_triangle[u][idx_v][idx_w]) continue;
-                    const auto w = inc_tri[u][idx_v][idx_w];
+                assert(rnk[u] < rnk[v]);
+
+                // u -> v edge
+
+                rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
+                    if (dead_triangle[u][idx_v][tri_idx_w]) continue;
+
+                    const auto w = inc_tri[u][idx_v][tri_idx_w];
+
                     // u -> v
-                    if (rnk[w] > rnk[u]) {
+                    if (rnk[w] < rnk[u]) {
+                        // w -> u edge
+                        //
+                        // w -> u -> v
+                        //  \-------/
+
                         auto tmp = [&](vertex_t x) -> bool {
                             // have to query from owner[w]
                             const auto idx_x = get_edge_idx(w, x);
-                            return supp[w][idx_x] <= k;
+                            assert(idx_x < (int)supp[w].size());
+                            return supp[w][idx_x] < k;
                         };
-                        dead_triangle[u][idx_v][idx_w] = tmp(u) or tmp(v);
+
+                        dead_triangle[u][idx_v][tri_idx_w] = tmp(u) or tmp(v);
 
                         // rather than marking it dead
                         // maybe just erase it from the vector?
+                    } else if (rnk[w] < rnk[v]) {
+                        const auto edge_idx_w = get_edge_idx(u, w);
+                        dead_triangle[u][idx_v][tri_idx_w] =
+                            supp[u][edge_idx_w] < k;
                     }
                 }
             }
@@ -104,13 +104,19 @@ void graph_t::compute_truss() {
 
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
-                rep(idx_w, 0u, inc_tri[u][idx_v].size()) {
-                    if (dead_triangle[u][idx_v][idx_w]) continue;
+
+                rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
+                    if (dead_triangle[u][idx_v][tri_idx_w]) continue;
+
                     // decrement edge {u, w} and {v, w}
-                    const auto w = inc_tri[u][idx_v][idx_w];
+                    const auto w = inc_tri[u][idx_v][tri_idx_w];
                     auto tmp = [&](int p, int q, int r) {
-                        if (rnk[p] < rnk[q]) std::swap(p, q);
+                        if (rnk[p] > rnk[q]) std::swap(p, q);
+
+                        // p -> q is the edge
                         const auto idx_q = get_edge_idx(p, q);
+
+                        assert(idx_q < (int)supp[p].size());
 
                         auto& supp_val = supp[p][idx_q];
 
@@ -119,11 +125,13 @@ void graph_t::compute_truss() {
                             if (supp_val < k2) {
                                 bucket[supp_val].splice(bucket[supp_val].end(),
                                                         bucket[supp_val + 1],
-                                                        bucket_iter[u][idx_v]);
+                                                        bucket_iter[p][idx_q]);
                             }
                         }
 
                         const auto idx_r = get_triangle_idx(p, idx_q, r);
+                        assert(idx_r < (idx_t)dead_triangle[p][idx_q].size());
+
                         dead_triangle[p][idx_q][idx_r] = true;
                     };
                     tmp(w, u, v);
@@ -335,6 +343,8 @@ void graph_t::init_triangles() {
             supp[p][idx] = (int)inc_tri[p][idx].size();
         }
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 int main(int argc, char** argv) {
@@ -366,46 +376,37 @@ int main(int argc, char** argv) {
 
     g.init();
 
-    std::cin.tie(nullptr)->sync_with_stdio(false);
+    g.compute_truss();
 
-    std::vector<triangle_t> tris;
-    for (auto p : g.owned_vertices) {
-        rep(idx_q, 0u, g.dodg[p].size()) {
-            const auto q = g.dodg[p][idx_q];
-
-            for (auto r : g.inc_tri[p][idx_q]) {
-                tris.push_back({q, p, r});
-                tris.push_back({p, q, r});
+    {
+        std::vector<std::array<int, 3>> res;
+        rep(k, 0, k2 + 1) {
+            for (auto [u, idx_v] : g.fin_bucket[k]) {
+                auto v = g.dodg[u][idx_v];
+                if (u > v) std::swap(u, v);
+                res.push_back({{u, v, k}});
             }
         }
+
+        const int local_cnt = (int)res.size();
+
+        std::vector<int> cnts(mpi_world_size);
+        MPI_Gather(&local_cnt, 1, MPI_INT, cnts.data(), 1, MPI_INT, 0,
+                   MPI_COMM_WORLD);
+
+        std::vector<int> offsets(mpi_world_size + 1);
+        rep(i, 0, mpi_world_size) offsets[i + 1] = offsets[i] + cnts[i];
+
+        std::vector<std::array<int, 3>> collate(offsets[mpi_world_size]);
+        MPI_Gatherv(res.data(), local_cnt, mpi_array_int_3, collate.data(),
+                    cnts.data(), offsets.data(), mpi_array_int_3, 0,
+                    MPI_COMM_WORLD);
+        std::sort(collate.begin(), collate.end());
+
+        std::cin.tie(nullptr)->sync_with_stdio(false);
+        for (auto [u, v, k] : collate)
+            std::cout << u << ' ' << v << ' ' << k << '\n';
     }
-
-    const int local_tri_cnt = tris.size();
-
-    // share to other people
-    std::vector<int> tri_cnt(mpi_world_size);
-    MPI_Gather(&local_tri_cnt, 1, MPI_INT, tri_cnt.data(), 1, MPI_INT, 0,
-               MPI_COMM_WORLD);
-
-    std::vector<int> tri_offset(mpi_world_size + 1);
-    rep(i, 0, mpi_world_size) tri_offset[i + 1] = tri_offset[i] + tri_cnt[i];
-
-    std::vector<triangle_t> final_tris(tri_offset[mpi_world_size]);
-    MPI_Gatherv(tris.data(), tris.size(), mpi_array_int_3, final_tris.data(),
-                tri_cnt.data(), tri_offset.data(), mpi_array_int_3, 0,
-                MPI_COMM_WORLD);
-
-    if (mpi_rank == 0) {
-        std::sort(final_tris.begin(), final_tris.end());
-        for (auto [u, v, w] : final_tris)
-            std::cout << u << ' ' << v << ' ' << w << '\n';
-    }
-
-    MPI_Finalize();
-
-    return 0;
-
-    g.compute_truss();
 
     MPI_Finalize();
 }

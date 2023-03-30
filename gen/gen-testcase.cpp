@@ -134,17 +134,17 @@ int main(int argc, char** argv) {
     graph_file.close();
 
     auto kte = vanilla_KTE(g, n, k2);
-    for (auto p : kte) {
-        int trussness = p.second < k1 ? k1 - 1 : p.second;
-        truss_file << p.first[0] << ' ' << p.first[1] << ' ' << trussness
-                   << '\n';
-    }
 
     rep(u, 0, n) {
         const auto nbd = g.edges(u);
         for (auto v : nbd)
             if (v > u and !kte.count(make_edge(u, v)))
-                truss_file << u << ' ' << v << ' ' << k2 << '\n';
+                kte[{{u, v}}] = k2;
     }
-    truss_file.close();
+
+    for (auto p : kte) {
+        int trussness = p.second < k1 ? k1 - 1 : p.second;
+        truss_file << p.first[0] << ' ' << p.first[1] << ' ' << trussness
+                   << '\n';
+    }
 }
