@@ -55,6 +55,7 @@ void graph_t::compute_truss() {
 
     std::list<edge_idx_t> cur;
 
+    std::map<triangle_t, edge_t> to_delete;
     for (int k = k1; k <= k2; ++k) {
         while (!bucket[k - 1].empty()) {
             assert(cur.empty());
@@ -102,8 +103,6 @@ void graph_t::compute_truss() {
             // If we remove this, does the code still work?
 
             // barrier here
-
-            std::map<triangle_t, edge_t> to_delete;
 
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
