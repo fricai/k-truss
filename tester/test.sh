@@ -5,7 +5,7 @@ pwd
 mkdir -p scratch
 
 n=100
-m=1000
+m=3000
 k1=1
 k2=3
 
