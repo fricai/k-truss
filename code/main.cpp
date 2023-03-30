@@ -63,11 +63,15 @@ void graph_t::compute_truss() {
     std::vector<int8_t> responses, answers;
 
     for (int k = k1; k <= k2; ++k) {
-        while (!bucket[k - 1].empty()) {
-            assert(cur.empty());
+        while (true) {
+            {
+                bool local_stop = bucket[k - 1].empty(), global_stop;
+                MPI_Allreduce(&local_stop, &global_stop, 1, MPI_CXX_BOOL,
+                              MPI_LAND, MPI_COMM_WORLD);
+                if (global_stop) break;
+            }
+
             cur.splice(cur.end(), bucket[k - 1]);
-            assert(bucket[k - 1].empty());
-            assert(!cur.empty());
 
 #define F(x) (supp[w][get_edge_idx(w, x)] < k)
             // first we mark dead triangles
@@ -163,14 +167,33 @@ void graph_t::compute_truss() {
 
                         // need to make a send to just owner of w
                     } else if (rnk[w] < rnk[v]) {
-                        // this is completely local so no changed needed
-                        const auto edge_idx_w = get_edge_idx(u, w);
-                        dead_triangle[u][idx_v][tri_idx_w] =
-                            supp[u][edge_idx_w] < k;
+                        // local
                     }
                 }
             }
 #undef F
+
+            const auto update_triangle = [&](int p, int q, int r) {
+                const auto idx_q = get_edge_idx(p, q);
+
+                assert(idx_q < (int)supp[p].size());
+
+                auto& supp_val = supp[p][idx_q];
+
+                if (supp_val >= k) {
+                    --supp_val;
+                    if (supp_val < k2) {
+                        bucket[supp_val].splice(bucket[supp_val].end(),
+                                                bucket[supp_val + 1],
+                                                bucket_iter[p][idx_q]);
+                    }
+                }
+
+                const auto idx_r = get_triangle_idx(p, idx_q, r);
+                assert(idx_r < (idx_t)dead_triangle[p][idx_q].size());
+
+                dead_triangle[p][idx_q][idx_r] = true;
+            };
 
             for (auto [u, idx_v] : cur) {
                 const auto v = dodg[u][idx_v];
@@ -182,33 +205,37 @@ void graph_t::compute_truss() {
                     const auto w = inc_tri[u][idx_v][tri_idx_w];
                     auto tmp = [&](int p, int q, int r) {
                         if (rnk[p] > rnk[q]) std::swap(p, q);
-
                         // p -> q is the edge
-                        const auto idx_q = get_edge_idx(p, q);
 
-                        assert(idx_q < (int)supp[p].size());
-
-                        auto& supp_val = supp[p][idx_q];
-
-                        if (supp_val >= k) {
-                            --supp_val;
-                            if (supp_val < k2) {
-                                bucket[supp_val].splice(bucket[supp_val].end(),
-                                                        bucket[supp_val + 1],
-                                                        bucket_iter[p][idx_q]);
-                            }
-                        }
-
-                        const auto idx_r = get_triangle_idx(p, idx_q, r);
-                        assert(idx_r < (idx_t)dead_triangle[p][idx_q].size());
-
-                        dead_triangle[p][idx_q][idx_r] = true;
+                        if (owner[p] == mpi_rank)
+                            update_triangle(p, q, r);
+                        else
+                            disjoint_queries[owner[p]].push_back({{p, q, r}});
                     };
                     tmp(w, u, v);
                     tmp(w, v, u);
                 }
                 // delete edge (u, v)
             }
+
+            flatten_vector(disjoint_queries, send_buffer, send_cnts,
+                           send_offsets);
+            for (auto& v : disjoint_queries) v.clear();
+
+            MPI_Alltoall(send_cnts.data(), 1, MPI_INT, recv_cnts.data(), 1,
+                         MPI_INT, MPI_COMM_WORLD);
+
+            rep(i, 0, mpi_world_size) {
+                recv_offsets[i + 1] = recv_offsets[i] + recv_cnts[i];
+            }
+
+            recv_buffer.resize(recv_offsets[mpi_world_size]);
+            MPI_Alltoallv(send_buffer.data(), send_cnts.data(),
+                          send_offsets.data(), mpi_array_int_3,
+                          recv_buffer.data(), recv_cnts.data(),
+                          recv_offsets.data(), mpi_array_int_3, MPI_COMM_WORLD);
+
+            for (auto [p, q, r] : recv_buffer) update_triangle(p, q, r);
 
             fin_bucket[k - 1].splice(fin_bucket[k - 1].end(), cur);
         }
