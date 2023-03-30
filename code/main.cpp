@@ -20,10 +20,16 @@
 
 int mpi_world_size, mpi_rank;
 
+void graph_t::init_io() {
+    create_mmap();
+    read_header();
+    assign_owners();
+    read_owned_graph();
+}
+
 void graph_t::init() {
     k1 = args.startk;
     k2 = args.endk;
-    create_mmap();
     init_triangles();
     local_init();
 }
@@ -302,12 +308,14 @@ void graph_t::assign_owners() {
     }
 }
 
-void graph_t::read_header(std::ifstream& gf, std::ifstream& hf) {
-    gf.read((char*)&n, 4);
-    gf.read((char*)&m, 4);
+void graph_t::read_header() {
+    n = file_map[0];
+    m = file_map[1];
 
+    std::ifstream hf(args.headerpath, std::ios::binary);
     offset.resize(n + 1);
     hf.read((char*)offset.data(), 4 * n);
+    hf.close();
 
     rep(i, 0, n) offset[i] /= 4;
 
@@ -323,26 +331,20 @@ void graph_t::read_header(std::ifstream& gf, std::ifstream& hf) {
     rep(i, 0, n) rnk[i] = rnk[i] << 32 | i;
 }
 
-void graph_t::read_owned_graph(std::ifstream& gf) {
+void graph_t::read_owned_graph() {
     dodg.resize(n);
 
-    std::vector<uint32_t> scratch;
-    scratch.reserve(n);
     for (auto u : owned_vertices) {
-        gf.seekg(4 * offset[u]);
+        const auto nbh = file_map + offset[u] + 2;
 
-        uint32_t id, deg;
-        gf.read((char*)&id, 4);
-        gf.read((char*)&deg, 4);
-
+        const auto id = nbh[-2], deg = nbh[-1];
         assert(id == (uint32_t)u);
         assert(deg == (rnk[u] >> 32));
 
-        scratch.resize(deg);
-        gf.read((char*)scratch.data(), 4 * deg);
-
-        for (auto v : scratch)
+        rep(i, 0u, deg) {
+            const auto v = nbh[i];
             if (rnk[u] < rnk[v]) dodg[u].push_back(v);
+        }
 
         assert(std::is_sorted(dodg[u].begin(), dodg[u].end()));
     }
@@ -448,20 +450,12 @@ int main(int argc, char** argv) {
 
     argp_parse(&argp, argc, argv, 0, 0, &args);
 
-    std::ifstream gf(args.inputpath, std::ios::binary);
-    std::ifstream hf(args.headerpath, std::ios::binary);
-
     const int k1 = args.startk;
     const int k2 = args.endk;
     assert(k1 <= k2);
 
     graph_t g;
-
-    g.read_header(gf, hf);
-
-    g.assign_owners();
-    g.read_owned_graph(gf);
-
+    g.init_io();
     g.init();
 
     g.compute_truss();

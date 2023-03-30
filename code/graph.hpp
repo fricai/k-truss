@@ -21,8 +21,10 @@ struct graph_t {
     bool local_edge_oracle(int u, int v);
     bool file_edge_oracle(int u, int v);
 
-    void read_header(std::ifstream& gf, std::ifstream& hf);
-    void read_owned_graph(std::ifstream& gf);
+    void init_io();
+
+    void read_header();
+    void read_owned_graph();
 
     std::vector<int> owner;
     std::vector<vertex_t> owned_vertices;
