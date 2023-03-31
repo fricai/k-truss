@@ -39,20 +39,25 @@ void graph_t::init() {
 }
 
 void graph_t::local_init() {
-    bucket.resize(k2 + 1);
+    bucket.resize(actors);
+    rep(i, 0, actors) bucket[i].resize(k2 + 1);
+
     bucket_iter.resize(n);
     dead_triangle.resize(n);
 
-    for (auto u : owned_vertices) {
-        bucket_iter[u].resize(dodg[u].size());
-        dead_triangle[u].resize(dodg[u].size());
+#pragma omp parallel for schedule(dynamic, 1)
+    rep(i, 0, actors) {
+        for (auto u : actor_owned_vertices[i]) {
+            bucket_iter[u].resize(dodg[u].size());
+            dead_triangle[u].resize(dodg[u].size());
 
-        rep(idx_v, 0u, dodg[u].size()) {
-            const auto tau = std::min(supp[u][idx_v], k2);
-            bucket[tau].push_front({u, idx_v});
-            bucket_iter[u][idx_v] = bucket[tau].begin();
+            rep(idx_v, 0u, dodg[u].size()) {
+                const auto tau = std::min(supp[u][idx_v], k2);
+                bucket[i][tau].push_front({u, idx_v});
+                bucket_iter[u][idx_v] = bucket[i][tau].begin();
 
-            dead_triangle[u][idx_v].assign(inc_tri[u][idx_v].size(), false);
+                dead_triangle[u][idx_v].assign(inc_tri[u][idx_v].size(), false);
+            }
         }
     }
 }
@@ -60,7 +65,7 @@ void graph_t::local_init() {
 void graph_t::compute_truss() {
     fin_bucket.resize(k2 + 1);
 
-    std::list<edge_idx_t> cur;
+    std::vector<std::list<edge_idx_t>> cur(actors);
 
     std::vector<std::vector<triangle_t>> disjoint_queries(mpi_world_size);
     std::vector<triangle_t> send_buffer, recv_buffer;
@@ -73,35 +78,40 @@ void graph_t::compute_truss() {
     for (int k = k1; k <= k2; ++k) {
         while (true) {
             {
-                bool local_stop = bucket[k - 1].empty(), global_stop;
+                bool local_stop = true, global_stop;
+                rep(i, 0, actors) local_stop &= bucket[i][k - 1].empty();
                 MPI_Allreduce(&local_stop, &global_stop, 1, MPI_CXX_BOOL,
                               MPI_LAND, MPI_COMM_WORLD);
                 if (global_stop) break;
             }
 
-            cur.splice(cur.end(), bucket[k - 1]);
+            rep(i, 0, actors) cur[i].splice(cur[i].end(), bucket[i][k - 1]);
 
             // ensures the triangle deletions are mutually exclusive
 
 #define F(x) (supp[w][get_edge_idx(w, x)] < k)
             // we mark dead triangles
-            for (auto [u, idx_v] : cur) {
-                const auto v = dodg[u][idx_v];
-                // u -> v edge
+            rep(i, 0, actors) {
+                for (auto [u, idx_v] : cur[i]) {
+                    const auto v = dodg[u][idx_v];
+                    // u -> v edge
 
-                rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
-                    if (dead_triangle[u][idx_v][tri_idx_w]) continue;
-                    const auto w = inc_tri[u][idx_v][tri_idx_w];
-                    if (rnk[w] < rnk[u]) {
-                        // w -> u -> v
-                        if (owner[w] == mpi_rank)  // local
-                            dead_triangle[u][idx_v][tri_idx_w] = F(u) or F(v);
-                        else
-                            disjoint_queries[owner[w]].push_back({{w, u, v}});
-                    } else if (rnk[w] < rnk[v])
-                        // u -> w -> v
-                        dead_triangle[u][idx_v][tri_idx_w] =
-                            supp[u][get_edge_idx(u, w)] < k;
+                    rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
+                        if (dead_triangle[u][idx_v][tri_idx_w]) continue;
+                        const auto w = inc_tri[u][idx_v][tri_idx_w];
+                        if (rnk[w] < rnk[u]) {
+                            // w -> u -> v
+                            if (owner[w] == mpi_rank)  // local
+                                dead_triangle[u][idx_v][tri_idx_w] =
+                                    F(u) or F(v);
+                            else
+                                disjoint_queries[owner[w]].push_back(
+                                    {{w, u, v}});
+                        } else if (rnk[w] < rnk[v])
+                            // u -> w -> v
+                            dead_triangle[u][idx_v][tri_idx_w] =
+                                supp[u][get_edge_idx(u, w)] < k;
+                    }
                 }
             }
 
@@ -134,14 +144,17 @@ void graph_t::compute_truss() {
                           MPI_COMM_WORLD);
 
             std::vector<int> ctr(mpi_world_size);
-            for (auto [u, idx_v] : cur) {
-                // u -> v edge
-                rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
-                    if (dead_triangle[u][idx_v][tri_idx_w]) continue;
-                    const auto w = inc_tri[u][idx_v][tri_idx_w];
-                    if (rnk[w] < rnk[u] and owner[w] != mpi_rank) {
-                        dead_triangle[u][idx_v][tri_idx_w] =
-                            answers[send_offsets[owner[w]] + ctr[owner[w]]++];
+            rep(i, 0, actors) {
+                for (auto [u, idx_v] : cur[i]) {
+                    // u -> v edge
+                    rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
+                        if (dead_triangle[u][idx_v][tri_idx_w]) continue;
+                        const auto w = inc_tri[u][idx_v][tri_idx_w];
+                        if (rnk[w] < rnk[u] and owner[w] != mpi_rank) {
+                            dead_triangle[u][idx_v][tri_idx_w] =
+                                answers[send_offsets[owner[w]] +
+                                        ctr[owner[w]]++];
+                        }
                     }
                 }
             }
@@ -160,29 +173,32 @@ void graph_t::compute_truss() {
                 if (supp_val >= k) {
                     --supp_val;
                     if (supp_val < k2) {
-                        bucket[supp_val].splice(bucket[supp_val].end(),
-                                                bucket[supp_val + 1],
-                                                bucket_iter[p][idx_q]);
+                        auto& b = bucket[owner_actor[p]];
+                        b[supp_val].splice(b[supp_val].end(), b[supp_val + 1],
+                                           bucket_iter[p][idx_q]);
                     }
                 }
             };
 
-            for (auto [u, idx_v] : cur) {
-                const auto v = dodg[u][idx_v];
-                rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
-                    if (dead_triangle[u][idx_v][tri_idx_w]) continue;
+            rep(i, 0, actors) {
+                for (auto [u, idx_v] : cur[i]) {
+                    const auto v = dodg[u][idx_v];
+                    rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
+                        if (dead_triangle[u][idx_v][tri_idx_w]) continue;
 
-                    // decrement edge {u, w} and {v, w}
-                    const auto w = inc_tri[u][idx_v][tri_idx_w];
-                    auto tmp = [&](int p, int q, int r) {
-                        if (rnk[p] > rnk[q]) std::swap(p, q);  // p -> q
-                        if (owner[p] == mpi_rank)
-                            update_triangle(p, q, r);
-                        else
-                            disjoint_queries[owner[p]].push_back({{p, q, r}});
-                    };
-                    tmp(w, u, v);
-                    tmp(w, v, u);
+                        // decrement edge {u, w} and {v, w}
+                        const auto w = inc_tri[u][idx_v][tri_idx_w];
+                        auto tmp = [&](int p, int q, int r) {
+                            if (rnk[p] > rnk[q]) std::swap(p, q);  // p -> q
+                            if (owner[p] == mpi_rank)
+                                update_triangle(p, q, r);
+                            else
+                                disjoint_queries[owner[p]].push_back(
+                                    {{p, q, r}});
+                        };
+                        tmp(w, u, v);
+                        tmp(w, v, u);
+                    }
                 }
             }
 
@@ -206,11 +222,15 @@ void graph_t::compute_truss() {
             for (auto [p, q, r] : recv_buffer) update_triangle(p, q, r);
 
             // finalize these edges
-            fin_bucket[k - 1].splice(fin_bucket[k - 1].end(), cur);
+            // DONT parallelize
+            rep(i, 0, actors) fin_bucket[k - 1].splice(fin_bucket[k - 1].end(),
+                                                       cur[i]);
         }
     }
 
-    fin_bucket[k2].splice(fin_bucket[k2].end(), bucket[k2]);
+    // DONT parallelize
+    rep(i, 0, actors) fin_bucket[k2].splice(fin_bucket[k2].end(),
+                                            bucket[i][k2]);
 }
 
 void graph_t::create_mmap() {
