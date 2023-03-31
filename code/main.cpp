@@ -67,14 +67,13 @@ void graph_t::compute_truss() {
 
     std::vector<std::list<edge_idx_t>> cur(actors);
 
-    std::vector<std::vector<triangle_t>> disjoint_queries(mpi_world_size);
     std::vector<triangle_t> send_buffer, recv_buffer;
     std::vector<int> send_offsets, send_cnts;
     std::vector<int> recv_cnts(mpi_world_size),
         recv_offsets(mpi_world_size + 1);
 
-    std::vector tmpv(mpi_world_size,
-                     std::vector<std::vector<triangle_t>>(actors));
+    std::vector disjoint_queries(mpi_world_size,
+                                 std::vector<std::vector<triangle_t>>(actors));
 
     std::vector<std::vector<int>> cnt2, off2;
 
@@ -111,7 +110,8 @@ void graph_t::compute_truss() {
                                 dead_triangle[u][idx_v][tri_idx_w] =
                                     F(u) or F(v);
                             else
-                                tmpv[owner[w]][i].push_back({{w, u, v}});
+                                disjoint_queries[owner[w]][i].push_back(
+                                    {{w, u, v}});
                         } else if (rnk[w] < rnk[v])
                             // u -> w -> v
                             dead_triangle[u][idx_v][tri_idx_w] =
@@ -120,9 +120,9 @@ void graph_t::compute_truss() {
                 }
             }
 
-            flatten_3d_vector(tmpv, send_buffer, send_cnts, send_offsets, cnt2,
-                              off2);
-            for (auto& w : tmpv)
+            flatten_3d_vector(disjoint_queries, send_buffer, send_cnts,
+                              send_offsets, cnt2, off2);
+            for (auto& w : disjoint_queries)
                 for (auto& v : w) v.clear();
 
             MPI_Alltoall(send_cnts.data(), 1, MPI_INT, recv_cnts.data(), 1,
@@ -150,10 +150,9 @@ void graph_t::compute_truss() {
                           send_cnts.data(), send_offsets.data(), MPI_INT8_T,
                           MPI_COMM_WORLD);
 
-            std::vector ctr(mpi_world_size, std::vector(actors, 0));
-
 #pragma omp parallel for schedule(dynamic, 1)
             rep(i, 0, actors) {
+                std::vector ctr(mpi_world_size, 0);
                 for (auto [u, idx_v] : cur[i]) {
                     // u -> v edge
                     rep(tri_idx_w, 0u, inc_tri[u][idx_v].size()) {
@@ -162,7 +161,7 @@ void graph_t::compute_truss() {
                         if (rnk[w] < rnk[u] and owner[w] != mpi_rank) {
                             dead_triangle[u][idx_v][tri_idx_w] =
                                 answers[send_offsets[owner[w]] +
-                                        off2[owner[w]][i] + ctr[owner[w]][i]++];
+                                        off2[owner[w]][i] + ctr[owner[w]]++];
                         }
                     }
                 }
@@ -189,6 +188,7 @@ void graph_t::compute_truss() {
                 }
             };
 
+#pragma omp parallel for schedule(dynamic, 1)
             rep(i, 0, actors) {
                 for (auto [u, idx_v] : cur[i]) {
                     const auto v = dodg[u][idx_v];
@@ -199,10 +199,10 @@ void graph_t::compute_truss() {
                         const auto w = inc_tri[u][idx_v][tri_idx_w];
                         auto tmp = [&](int p, int q, int r) {
                             if (rnk[p] > rnk[q]) std::swap(p, q);  // p -> q
-                            if (owner[p] == mpi_rank)
+                            if (owner[p] == mpi_rank and owner_actor[p] == i)
                                 update_triangle(p, q, r);
                             else
-                                disjoint_queries[owner[p]].push_back(
+                                disjoint_queries[owner[p]][i].push_back(
                                     {{p, q, r}});
                         };
                         tmp(w, u, v);
@@ -211,9 +211,10 @@ void graph_t::compute_truss() {
                 }
             }
 
-            flatten_vector(disjoint_queries, send_buffer, send_cnts,
-                           send_offsets);
-            for (auto& v : disjoint_queries) v.clear();
+            flatten_3d_vector(disjoint_queries, send_buffer, send_cnts,
+                              send_offsets);
+            for (auto& w : disjoint_queries)
+                for (auto& v : w) v.clear();
 
             MPI_Alltoall(send_cnts.data(), 1, MPI_INT, recv_cnts.data(), 1,
                          MPI_INT, MPI_COMM_WORLD);
@@ -228,7 +229,31 @@ void graph_t::compute_truss() {
                           recv_buffer.data(), recv_cnts.data(),
                           recv_offsets.data(), mpi_array_int_3, MPI_COMM_WORLD);
 
-            for (auto [p, q, r] : recv_buffer) update_triangle(p, q, r);
+            // Can I parallelize this?
+            std::sort(recv_buffer.begin(), recv_buffer.end(),
+                      [&](const auto& a, const auto& b) {
+                          return owner_actor[a[0]] < owner_actor[b[0]];
+                      });
+
+            std::vector<int> actor_offsets(actors + 1, 0);
+#pragma omp parallel for schedule(dynamic, 1)
+            rep(i, 0, actors) {
+                // I want first element with owner > i
+                actor_offsets[i + 1] =
+                    std::lower_bound(recv_buffer.begin(), recv_buffer.end(), i,
+                                     [&](const auto& a, int x) {
+                                         return owner_actor[a[0]] <= x;
+                                     }) -
+                    recv_buffer.begin();
+            }
+
+#pragma omp parallel for schedule(dynamic, 1)
+            rep(i, 0, actors) {
+                rep(j, actor_offsets[i], actor_offsets[i + 1]) {
+                    const auto [p, q, r] = recv_buffer[j];
+                    update_triangle(p, q, r);
+                }
+            }
 
             // finalize these edges
             // DONT parallelize
@@ -377,7 +402,7 @@ void graph_t::init_triangles() {
     supp.resize(n);
     inc_tri.resize(n);
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic, 1)
     rep(actor, 0, actors) {
         for (auto p : actor_owned_vertices[actor]) {
             supp[p].assign(dodg[p].size(), 0);
@@ -389,7 +414,7 @@ void graph_t::init_triangles() {
                                  std::vector<std::vector<triangle_t>>(actors));
     // std::vector<std::vector<triangle_t>> queued_triangles(mpi_world_size);
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic, 1)
     rep(actor, 0, actors) {
         for (auto p : actor_owned_vertices[actor]) {
             rep(idx_q_, 0u, dodg[p].size()) {
@@ -448,7 +473,7 @@ void graph_t::init_triangles() {
     // Note the best way of doing things :/
 
     std::vector<int> actor_offsets(actors + 1, 0);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic, 1)
     rep(i, 0, actors) {
         // I want first element with owner > i
         actor_offsets[i + 1] =
@@ -458,7 +483,7 @@ void graph_t::init_triangles() {
             recv_triangles.begin();
     }
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic, 1)
     rep(i, 0, actors) {
         rep(j, actor_offsets[i], actor_offsets[i + 1]) {
             const auto [q, r, p] = recv_triangles[j];
@@ -467,7 +492,7 @@ void graph_t::init_triangles() {
         }
     }
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic, 1)
     rep(i, 0, actors) {
         for (auto p : actor_owned_vertices[i]) {
             rep(idx, 0u, inc_tri[p].size()) {
