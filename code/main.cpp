@@ -73,6 +73,9 @@ void graph_t::compute_truss() {
     std::vector<int> recv_cnts(mpi_world_size),
         recv_offsets(mpi_world_size + 1);
 
+    std::vector tmpv(mpi_world_size,
+                     std::vector<std::vector<triangle_t>>(actors));
+
     std::vector<int8_t> responses, answers;
 
     for (int k = k1; k <= k2; ++k) {
@@ -105,8 +108,7 @@ void graph_t::compute_truss() {
                                 dead_triangle[u][idx_v][tri_idx_w] =
                                     F(u) or F(v);
                             else
-                                disjoint_queries[owner[w]].push_back(
-                                    {{w, u, v}});
+                                tmpv[owner[w]][i].push_back({{w, u, v}});
                         } else if (rnk[w] < rnk[v])
                             // u -> w -> v
                             dead_triangle[u][idx_v][tri_idx_w] =
@@ -115,9 +117,9 @@ void graph_t::compute_truss() {
                 }
             }
 
-            flatten_vector(disjoint_queries, send_buffer, send_cnts,
-                           send_offsets);
-            for (auto& v : disjoint_queries) v.clear();
+            flatten_3d_vector(tmpv, send_buffer, send_cnts, send_offsets);
+            for (auto& w : tmpv)
+                for (auto& v : w) v.clear();
 
             MPI_Alltoall(send_cnts.data(), 1, MPI_INT, recv_cnts.data(), 1,
                          MPI_INT, MPI_COMM_WORLD);
