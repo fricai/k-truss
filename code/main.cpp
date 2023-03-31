@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <mpi.h>
+#include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -408,6 +409,216 @@ void graph_t::init_triangles() {
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
+void output_2(const graph_t& g, int k1, int k2) {
+    const int n = g.n;
+
+    dsu F(n);
+
+    std::vector<edge_t> queued_edges;
+
+    std::vector<edge_t> spanning_forest;
+
+    for (auto [u, idx_v] : g.fin_bucket[k2]) {
+        auto v = g.dodg[u][idx_v];
+
+        if (F.merge(u, v)) {
+            // send to 0 to add to 0's DSU
+            (mpi_rank == 0 ? spanning_forest : queued_edges)
+                .push_back(edge_t({u, v}));
+        }
+    }
+
+    std::vector<edge_t> edge_buffer;
+
+    std::vector<int> queue_lengths(mpi_rank == 0 ? mpi_world_size : 0);
+
+    int queued_edges_size = queued_edges.size();
+    MPI_Gather(&queued_edges_size, 1, MPI_INT, queue_lengths.data(), 1, MPI_INT,
+               0, MPI_COMM_WORLD);
+
+    std::vector<int> displacements(mpi_rank == 0 ? mpi_world_size + 1 : 0);
+
+    if (mpi_rank == 0) {
+        displacements[0] = 0;
+        rep(i, 0, mpi_world_size) displacements[i + 1] =
+            displacements[i] + queue_lengths[i];
+        edge_buffer.resize(displacements[mpi_world_size]);
+    }
+
+    MPI_Gatherv(queued_edges.data(), queued_edges_size, mpi_edge_t,
+                edge_buffer.data(), queue_lengths.data(), displacements.data(),
+                mpi_edge_t, 0, MPI_COMM_WORLD);
+
+    if (mpi_rank == 0) {
+        for (auto [u, v] : edge_buffer) {
+            if (F.merge(u, v)) {
+                spanning_forest.push_back(edge_t({u, v}));
+            }
+        }
+    }
+
+    {
+        int spanning_forest_len = (int)spanning_forest.size();
+        MPI_Bcast(&spanning_forest_len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        spanning_forest.resize(spanning_forest_len);
+        MPI_Bcast(spanning_forest.data(), spanning_forest_len, MPI_INT, 0,
+                  MPI_COMM_WORLD);
+        if (mpi_rank != 0)
+            for (auto [u, v] : spanning_forest) F.merge(u, v);
+    }
+
+    std::vector<std::string> grps(n);
+    rep(u, 0, n) {
+        if (F.size(u) > 1) grps[F.head(u)] += std::to_string(u) + " ";
+    }
+
+    std::vector<bool> vis(n, false);
+
+    MPI_File fh;
+    MPI_File_open(MPI_COMM_WORLD, args.outputpath.data(),
+                  MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+
+    std::string buf;
+
+    bool found_any = false;
+
+    int fst = (n + mpi_world_size - 1) / mpi_world_size * mpi_rank,
+        lst = std::min((n + mpi_world_size - 1) / mpi_world_size * (mpi_rank + 1), n);
+    std::cout << "rank = " << mpi_rank << ", fst = " << fst << ", lst = " << lst << "\n";
+    assert(fst <= n);
+
+    std::vector<std::vector<int>> heads(lst-fst);
+    auto proxy = [&](int v, int u) {
+        u = F.head(u);
+        if (grps[u].empty() or vis[u]) return;
+        vis[u] = true;
+        heads[v].push_back(u);
+    };
+    
+    int n_infls = 0;
+    rep(u, fst, lst) {
+        int i = u-fst;
+        uint32_t const* const neighbourhood = g.file_map + g.offset[u] + 2;
+        const int deg = g.offset[u + 1] - g.offset[u] - 2;
+
+        rep(j, 0, deg) proxy(i, neighbourhood[j]);
+        
+        for (auto v : heads[i]) vis[v] = false;
+
+        if ((int)heads[i].size() < args.p) continue;
+
+        n_infls++;
+        found_any = true;
+    }
+
+    int global_n_infls;
+    MPI_Allreduce(&n_infls, &global_n_infls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    if (mpi_rank == 0) {
+        std::string global_n_infls_str = std::to_string(global_n_infls) + "\n";
+        MPI_File_write_shared(fh, global_n_infls_str.data(), 
+                global_n_infls_str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    rep(u, fst, lst) {
+        int i = u-fst;
+        if (heads[i].size() < args.p) continue;
+        buf.clear();
+        buf += std::to_string(u) + " ";
+        if (args.verbose) {
+            buf += "\n";
+            for (auto r : heads[i]) buf += grps[r];
+            buf += "\n";
+        }
+        MPI_File_write_shared(fh, buf.data(), buf.size(), MPI_CHAR,
+                              MPI_STATUS_IGNORE);
+    }
+
+    MPI_File_close(&fh);
+}
+
+void output_1(const graph_t& g, int k1, int k2, int largest_truss) {
+    const int n = g.n;
+    std::ofstream outf(args.outputpath);
+    if (args.verbose) {
+        dsu F(n);
+
+        std::vector<std::vector<std::vector<vertex_t>>> trusses(
+            mpi_rank == 0 ? std::max(0, std::min(k2, largest_truss) - k1 + 1)
+                          : 0);
+
+        std::vector<std::vector<vertex_t>> scratch(n);
+        std::vector<edge_t> queued_edges;
+
+        std::vector<edge_t> edge_buffer;
+        for (int k = largest_truss; k >= k1; --k) {
+            for (auto [u, idx_v] : g.bucket[k]) {
+                auto v = g.dodg[u][idx_v];
+                bool result = F.merge(u, v);
+                if (result and mpi_rank != 0) {
+                    // send to 0 to add to 0's DSU
+                    queued_edges.push_back(edge_t({u, v}));
+                }
+            }
+
+            std::vector<int> queue_lengths(mpi_rank == 0 ? mpi_world_size : 0);
+
+            int queued_edges_size = queued_edges.size();
+            MPI_Gather(&queued_edges_size, 1, MPI_INT, queue_lengths.data(), 1,
+                       MPI_INT, 0, MPI_COMM_WORLD);
+
+            std::vector<int> displacements(mpi_rank == 0 ? mpi_world_size + 1
+                                                         : 0);
+
+            if (mpi_rank == 0) {
+                displacements[0] = 0;
+                rep(i, 0, mpi_world_size) displacements[i + 1] =
+                    displacements[i] + queue_lengths[i];
+                edge_buffer.resize(displacements[mpi_world_size]);
+            }
+
+            MPI_Gatherv(queued_edges.data(), queued_edges_size, mpi_edge_t,
+                        edge_buffer.data(), queue_lengths.data(),
+                        displacements.data(), mpi_edge_t, 0, MPI_COMM_WORLD);
+
+            if (mpi_rank == 0) {
+                for (auto [u, v] : edge_buffer) F.merge(u, v);
+
+                if (k <= k2) {
+                    // k - k1
+                    rep(u, 0, n) scratch[F.head(u)].push_back(u);
+                    rep(u, 0, n) {
+                        if (scratch[u].size() > 1)
+                            trusses[k - k1].push_back(scratch[u]);
+                        scratch[u].clear();
+                    }
+                }
+            }
+        }
+
+        if (mpi_rank == 0) {
+            for (int k = k1; k <= k2; ++k) {
+                if (k <= largest_truss) {
+                    outf << "1\n";
+                    outf << trusses[k - k1].size() << '\n';
+                    for (const auto& vec : trusses[k - k1]) {
+                        for (auto v : vec) outf << v << ' ';
+                        outf << '\n';
+                    }
+                } else {
+                    outf << "0\n";
+                }
+            }
+        }
+    } else {
+        if (mpi_rank == 0) {
+            for (int k = k1; k < k2; ++k) outf << (k <= largest_truss) << ' ';
+            outf << (k2 <= largest_truss);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
 
@@ -431,35 +642,37 @@ int main(int argc, char** argv) {
 
     g.compute_truss();
 
-    {
-        std::vector<std::array<int, 3>> res;
-        rep(k, 0, k2 + 1) {
-            for (auto [u, idx_v] : g.fin_bucket[k]) {
-                auto v = g.dodg[u][idx_v];
-                if (u > v) std::swap(u, v);
-                res.push_back({{u, v, k}});
-            }
-        }
+    output_2(g, k1, k2);
 
-        const int local_cnt = (int)res.size();
+    // {
+    //     std::vector<std::array<int, 3>> res;
+    //     rep(k, 0, k2 + 1) {
+    //         for (auto [u, idx_v] : g.fin_bucket[k]) {
+    //             auto v = g.dodg[u][idx_v];
+    //             if (u > v) std::swap(u, v);
+    //             res.push_back({{u, v, k}});
+    //         }
+    //     }
 
-        std::vector<int> cnts(mpi_world_size);
-        MPI_Gather(&local_cnt, 1, MPI_INT, cnts.data(), 1, MPI_INT, 0,
-                   MPI_COMM_WORLD);
+    //     const int local_cnt = (int)res.size();
 
-        std::vector<int> offsets(mpi_world_size + 1);
-        rep(i, 0, mpi_world_size) offsets[i + 1] = offsets[i] + cnts[i];
+    //     std::vector<int> cnts(mpi_world_size);
+    //     MPI_Gather(&local_cnt, 1, MPI_INT, cnts.data(), 1, MPI_INT, 0,
+    //                MPI_COMM_WORLD);
 
-        std::vector<std::array<int, 3>> collate(offsets[mpi_world_size]);
-        MPI_Gatherv(res.data(), local_cnt, mpi_array_int_3, collate.data(),
-                    cnts.data(), offsets.data(), mpi_array_int_3, 0,
-                    MPI_COMM_WORLD);
-        std::sort(collate.begin(), collate.end());
+    //     std::vector<int> offsets(mpi_world_size + 1);
+    //     rep(i, 0, mpi_world_size) offsets[i + 1] = offsets[i] + cnts[i];
 
-        std::cin.tie(nullptr)->sync_with_stdio(false);
-        for (auto [u, v, k] : collate)
-            std::cout << u << ' ' << v << ' ' << k << '\n';
-    }
+    //     std::vector<std::array<int, 3>> collate(offsets[mpi_world_size]);
+    //     MPI_Gatherv(res.data(), local_cnt, mpi_array_int_3, collate.data(),
+    //                 cnts.data(), offsets.data(), mpi_array_int_3, 0,
+    //                 MPI_COMM_WORLD);
+    //     std::sort(collate.begin(), collate.end());
+
+    //     std::cin.tie(nullptr)->sync_with_stdio(false);
+    //     for (auto [u, v, k] : collate)
+    //         std::cout << u << ' ' << v << ' ' << k << '\n';
+    // }
 
     MPI_Finalize();
 }
