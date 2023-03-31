@@ -98,7 +98,7 @@ void flatten_3d_vector(
     const auto n = to_flatten.size();
     const auto m = to_flatten[0].size();
 
-    std::vector off2(n, std::vector(m, 0));
+    std::vector off2(n, std::vector(m + 1, 0));
 
     cnt.resize(n);
     offsets.resize(n + 1);
