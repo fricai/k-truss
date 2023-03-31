@@ -1,10 +1,12 @@
 #!/bin/bash
 
-n=100
-m=1000
+n=1000
+m=10000
 k1=1
 k2=20
-ranks=6
+ranks=3
+
+export OMP_NUM_THREADS=4
 
 if [[ -z $1 ]]
 then

@@ -1,11 +1,13 @@
 #include <fcntl.h>
 #include <mpi.h>
+#include <omp.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <execution>
 #include <iostream>
 #include <numeric>
 #include <thread>
@@ -19,6 +21,8 @@
 #include "utils.hpp"
 
 int mpi_world_size, mpi_rank;
+
+graph_t::graph_t() : actors{2 * omp_get_max_threads()} {}
 
 void graph_t::init_io() {
     create_mmap();
@@ -277,6 +281,15 @@ void graph_t::assign_owners() {
         l = r;
         tot -= cur_sum;
     }
+
+    owner_actor.assign(n, -1);
+    actor_owned_vertices.resize(actors);
+    for (auto& v : actor_owned_vertices)
+        v.reserve(owned_vertices.size() / actors + 1);
+    for (auto u : owned_vertices) {
+        owner_actor[u] = u % actors;
+        actor_owned_vertices[owner_actor[u]].push_back(u);
+    }
 }
 
 void graph_t::read_header() {
@@ -335,35 +348,44 @@ void graph_t::init_triangles() {
     supp.resize(n);
     inc_tri.resize(n);
 
-    for (auto p : owned_vertices) {
-        supp[p].assign(dodg[p].size(), 0);
-        inc_tri[p].assign(dodg[p].size(), {});
+#pragma omp parallel for schedule(dynamic)
+    rep(actor, 0, actors) {
+        for (auto p : actor_owned_vertices[actor]) {
+            supp[p].assign(dodg[p].size(), 0);
+            inc_tri[p].assign(dodg[p].size(), {});
+        }
     }
 
-    std::vector<std::vector<triangle_t>> queued_triangles(mpi_world_size);
+    std::vector queued_triangles(mpi_world_size,
+                                 std::vector<std::vector<triangle_t>>(actors));
+    // std::vector<std::vector<triangle_t>> queued_triangles(mpi_world_size);
 
-    for (auto p : owned_vertices) {
-        rep(idx_q_, 0u, dodg[p].size()) {
-            rep(idx_r_, idx_q_ + 1, dodg[p].size()) {
-                vertex_t q = dodg[p][idx_q_], r = dodg[p][idx_r_];
-                idx_t idx_q = idx_q_, idx_r = idx_r_;
+#pragma omp parallel for schedule(dynamic)
+    rep(actor, 0, actors) {
+        for (auto p : actor_owned_vertices[actor]) {
+            rep(idx_q_, 0u, dodg[p].size()) {
+                rep(idx_r_, idx_q_ + 1, dodg[p].size()) {
+                    vertex_t q = dodg[p][idx_q_], r = dodg[p][idx_r_];
+                    idx_t idx_q = idx_q_, idx_r = idx_r_;
 
-                if (rnk[q] > rnk[r]) {
-                    std::swap(idx_q, idx_r);
-                    std::swap(q, r);
-                }
+                    if (rnk[q] > rnk[r]) {
+                        std::swap(idx_q, idx_r);
+                        std::swap(q, r);
+                    }
 
-                // rnk[p] < rnk[q] < rnk[r]
+                    // rnk[p] < rnk[q] < rnk[r]
 
-                // p -> q edge exists
-                // p -> r edge exists
-                // if q -> r edge exists
+                    // p -> q edge exists
+                    // p -> r edge exists
+                    // if q -> r edge exists
 
-                if (edge_oracle(q, r)) {
-                    inc_tri[p][idx_q].push_back(r);
-                    inc_tri[p][idx_r].push_back(q);
+                    if (edge_oracle(q, r)) {
+                        inc_tri[p][idx_q].push_back(r);
+                        inc_tri[p][idx_r].push_back(q);
 
-                    queued_triangles[owner[q]].push_back({{q, r, p}});
+                        queued_triangles[owner[q]][actor].push_back(
+                            {{q, r, p}});
+                    }
                 }
             }
         }
@@ -372,8 +394,8 @@ void graph_t::init_triangles() {
     std::vector<int> send_cnt, send_offsets;
     std::vector<triangle_t> send_triangles;
 
-    destructive_flatten_vector(queued_triangles, send_triangles, send_cnt,
-                               send_offsets);
+    flatten_3d_vector(queued_triangles, send_triangles, send_cnt, send_offsets);
+    clear_vector(queued_triangles);
 
     std::vector<int> recv_cnt(mpi_world_size), recv_offsets(mpi_world_size + 1);
     MPI_Alltoall(send_cnt.data(), 1, MPI_INT, recv_cnt.data(), 1, MPI_INT,
@@ -388,20 +410,46 @@ void graph_t::init_triangles() {
                   recv_offsets.data(), mpi_array_int_3, MPI_COMM_WORLD);
     clear_vector(send_triangles);
 
-    for (auto [q, r, p] : recv_triangles) {
-        const auto idx_r = get_edge_idx(q, r);
-        inc_tri[q][idx_r].push_back(p);
+    // Would want to parallelize this
+    std::sort(recv_triangles.begin(), recv_triangles.end(),
+              [&](const auto& a, const auto& b) {
+                  return owner_actor[a[0]] < owner_actor[b[0]];
+              });
+
+    // Note the best way of doing things :/
+
+    std::vector<int> actor_offsets(actors + 1, 0);
+#pragma omp parallel for schedule(dynamic)
+    rep(i, 0, actors) {
+        // I want first element with owner > i
+        actor_offsets[i + 1] =
+            std::lower_bound(
+                recv_triangles.begin(), recv_triangles.end(), i,
+                [&](const auto& a, int x) { return owner_actor[a[0]] <= x; }) -
+            recv_triangles.begin();
     }
 
-    for (auto p : owned_vertices) {
-        rep(idx, 0u, inc_tri[p].size()) {
-            std::sort(inc_tri[p][idx].begin(), inc_tri[p][idx].end());
-            // inc_tri[p][idx].shrink_to_fit();
-            /*
-             * Should I keep this or not?
-             */
+#pragma omp parallel for schedule(dynamic)
+    rep(i, 0, actors) {
+        rep(j, actor_offsets[i], actor_offsets[i + 1]) {
+            const auto [q, r, p] = recv_triangles[j];
+            const auto idx_r = get_edge_idx(q, r);
+            inc_tri[q][idx_r].push_back(p);
+        }
+    }
 
-            supp[p][idx] = (int)inc_tri[p][idx].size();
+#pragma omp parallel for schedule(dynamic)
+    rep(i, 0, actors) {
+        for (auto p : actor_owned_vertices[i]) {
+            rep(idx, 0u, inc_tri[p].size()) {
+                std::sort(inc_tri[p][idx].begin(), inc_tri[p][idx].end());
+                // inc_tri[p][idx].shrink_to_fit();
+                /*
+                 * Should I keep this or not?
+                 */
+
+                supp[p][idx] = (int)inc_tri[p][idx].size();
+            }
         }
     }
 
@@ -409,7 +457,14 @@ void graph_t::init_triangles() {
 }
 
 int main(int argc, char** argv) {
-    MPI_Init(&argc, &argv);
+    int required = MPI_THREAD_FUNNELED, provided;
+    MPI_Init_thread(&argc, &argv, required, &provided);
+
+    if (required != provided) {
+        std::cout << "Threads not properly supported\n";
+        MPI_Finalize();
+        return 0;
+    }
 
     MPI_Comm_size(MPI_COMM_WORLD, &mpi_world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
@@ -426,6 +481,7 @@ int main(int argc, char** argv) {
     assert(k1 <= k2);
 
     graph_t g;
+
     g.init_io();
     g.init();
 

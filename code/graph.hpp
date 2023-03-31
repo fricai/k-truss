@@ -15,6 +15,7 @@ struct graph_t {
     uint64_t file_len;
     void create_mmap();
 
+    graph_t();
     ~graph_t() { munmap((void*)file_map, file_len); }
 
     bool edge_oracle(int u, int v);
@@ -26,8 +27,11 @@ struct graph_t {
     void read_header();
     void read_owned_graph();
 
-    std::vector<int> owner;
+    const int actors;
+    std::vector<int> owner, owner_actor;
     std::vector<vertex_t> owned_vertices;
+    std::vector<std::vector<vertex_t>> actor_owned_vertices;
+
     void assign_owners();
 
     void init();
