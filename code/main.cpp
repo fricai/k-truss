@@ -76,6 +76,8 @@ void graph_t::compute_truss() {
     std::vector tmpv(mpi_world_size,
                      std::vector<std::vector<triangle_t>>(actors));
 
+    std::vector<std::vector<int>> cnt2, off2;
+
     std::vector<int8_t> responses, answers;
 
     for (int k = k1; k <= k2; ++k) {
@@ -94,6 +96,7 @@ void graph_t::compute_truss() {
 
 #define F(x) (supp[w][get_edge_idx(w, x)] < k)
             // we mark dead triangles
+#pragma omp parallel for schedule(dynamic, 1)
             rep(i, 0, actors) {
                 for (auto [u, idx_v] : cur[i]) {
                     const auto v = dodg[u][idx_v];
@@ -117,7 +120,8 @@ void graph_t::compute_truss() {
                 }
             }
 
-            flatten_3d_vector(tmpv, send_buffer, send_cnts, send_offsets);
+            flatten_3d_vector(tmpv, send_buffer, send_cnts, send_offsets, cnt2,
+                              off2);
             for (auto& w : tmpv)
                 for (auto& v : w) v.clear();
 
@@ -134,6 +138,7 @@ void graph_t::compute_truss() {
                           recv_offsets.data(), mpi_array_int_3, MPI_COMM_WORLD);
 
             responses.resize(recv_offsets[mpi_world_size]);
+#pragma omp parallel for
             rep(i, 0, recv_offsets[mpi_world_size]) {
                 const auto [w, u, v] = recv_buffer[i];
                 responses[i] = F(u) or F(v);
@@ -145,7 +150,9 @@ void graph_t::compute_truss() {
                           send_cnts.data(), send_offsets.data(), MPI_INT8_T,
                           MPI_COMM_WORLD);
 
-            std::vector<int> ctr(mpi_world_size);
+            std::vector ctr(mpi_world_size, std::vector(actors, 0));
+
+#pragma omp parallel for schedule(dynamic, 1)
             rep(i, 0, actors) {
                 for (auto [u, idx_v] : cur[i]) {
                     // u -> v edge
@@ -155,7 +162,7 @@ void graph_t::compute_truss() {
                         if (rnk[w] < rnk[u] and owner[w] != mpi_rank) {
                             dead_triangle[u][idx_v][tri_idx_w] =
                                 answers[send_offsets[owner[w]] +
-                                        ctr[owner[w]]++];
+                                        off2[owner[w]][i] + ctr[owner[w]][i]++];
                         }
                     }
                 }
