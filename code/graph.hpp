@@ -53,7 +53,7 @@ struct graph_t {
     std::vector<std::vector<std::vector<bool>>> dead_triangle;
     std::vector<std::list<edge_idx_t>> fin_bucket;
 
-    std::vector<std::list<edge_idx_t>> bucket;
+    std::vector<std::vector<std::list<edge_idx_t>>> bucket;
     std::vector<std::vector<std::list<edge_idx_t>::iterator>> bucket_iter;
 
     supp_t k1, k2;

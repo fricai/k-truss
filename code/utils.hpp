@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "graph.hpp"
+
 template <class T>
 void clear_vector(std::vector<T>& v) {
     return std::vector<T>().swap(v);
@@ -50,28 +52,29 @@ template <class T>
 void flatten_3d_vector(
     const std::vector<std::vector<std::vector<T>>>& to_flatten,
     std::vector<T>& flattened, std::vector<int>& cnt, std::vector<int>& offsets,
-    std::vector<std::vector<int>>& cnt2,
-    std::vector<std::vector<int>>& offsets2) {
+    std::vector<std::vector<int>>& cnt2, std::vector<std::vector<int>>& off2) {
     // first dimenion is the number of mpi ranks
     // second dimension is the number of threads on this node
 
     const auto n = to_flatten.size();
+    const auto m = to_flatten[0].size();
 
-    cnt.resize(n);
-    cnt2.resize(n);
+    cnt.assign(n, 0);
     offsets.resize(n + 1);
-    offsets2.resize(n);
+    offsets[0] = 0;
+
+    cnt2.resize(n);
+    off2.resize(n);
 
     rep(i, 0u, n) {
-        const auto m = to_flatten[i].size();
-
         cnt2[i].resize(m);
 
-        offsets2[i].resize(m + 1);
+        off2[i].resize(m + 1);
+        off2[i][0] = 0;
         rep(j, 0u, m) {
             cnt2[i][j] = to_flatten[i][j].size();
             cnt[i] += cnt2[i][j];
-            offsets2[i][j + 1] = offsets2[i][j] + cnt2[i][j];
+            off2[i][j + 1] = off2[i][j] + cnt2[i][j];
         }
 
         offsets[i + 1] = offsets[i] + cnt[i];
@@ -79,10 +82,10 @@ void flatten_3d_vector(
 
     flattened.resize(offsets[n]);
     rep(i, 0u, n) {
-        const auto m = to_flatten[i].size();
+#pragma omp parallel for schedule(dynamic, 1)
         rep(j, 0u, m) {
             std::copy_n(to_flatten[i][j].begin(), cnt2[i][j],
-                        flattened.begin() + offsets[i] + offsets2[i][j]);
+                        flattened.begin() + offsets[i] + off2[i][j]);
         }
     }
 }
@@ -98,10 +101,11 @@ void flatten_3d_vector(
     const auto n = to_flatten.size();
     const auto m = to_flatten[0].size();
 
-    std::vector off2(n, std::vector(m, 0));
+    std::vector off2(n, std::vector(m + 1, 0));
 
-    cnt.resize(n);
+    cnt.assign(n, 0);
     offsets.resize(n + 1);
+    offsets[0] = 0;
 
     rep(i, 0u, n) {
         rep(j, 0u, m) {
@@ -114,7 +118,7 @@ void flatten_3d_vector(
 
     flattened.resize(offsets[n]);
     rep(i, 0u, n) {
-        // this can be parallelized
+#pragma omp parallel for schedule(dynamic, 1)
         rep(j, 0u, m) {
             std::copy(to_flatten[i][j].begin(), to_flatten[i][j].end(),
                       flattened.begin() + offsets[i] + off2[i][j]);
