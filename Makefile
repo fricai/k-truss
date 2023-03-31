@@ -1,5 +1,16 @@
+CC=mpic++
+CFLAGS=-Wall -std=c++17 -O3 -funroll-loops
+
+UNAME := $(shell uname)
+INCLUDES=
+LDFLAGS=
+ifeq ($(UNAME), Darwin)
+	INCLUDES=-I/opt/homebrew/opt/libomp/include
+	LDFLAGS=-L/opt/homebrew/opt/libomp/lib -lomp
+endif
+
 main:
-	mpic++ -Wall -std=c++17 -O3 -funroll-loops -fopenmp code/main.cpp -o a3
+	$(CC) $(CFLAGS) $(INCLUDES) code/main.cpp $(LDFLAGS) -o a3
 
 clean:
 	rm a3

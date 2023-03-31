@@ -113,6 +113,11 @@ void argp_parse(int* argp, int argc, char** argv, int opt1, int opt2, arguments_
             proc_args[i] = proc_args[i+1] = true;
             continue;
         }
+        if (strcmp(argv[i],"--taskid") == 0) {
+            args->outputpath = std::stoi(argv[i+1]);
+            proc_args[i] = proc_args[i+1] = true;
+            continue;
+        }
         if (strcmp(argv[i],"--verbose") == 0) {
             args->verbose = std::stoi(argv[i+1]);
             proc_args[i] = proc_args[i+1] = true;
