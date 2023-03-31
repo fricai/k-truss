@@ -114,7 +114,7 @@ void argp_parse(int* argp, int argc, char** argv, int opt1, int opt2, arguments_
             continue;
         }
         if (strcmp(argv[i],"--taskid") == 0) {
-            args->outputpath = std::stoi(argv[i+1]);
+            args->taskid = std::stoi(argv[i+1]);
             proc_args[i] = proc_args[i+1] = true;
             continue;
         }

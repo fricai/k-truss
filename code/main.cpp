@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
-#include <execution>
 #include <iostream>
 #include <numeric>
 #include <thread>
@@ -683,6 +682,16 @@ int main(int argc, char** argv) {
 
     argp_parse(&argp, argc, argv, 0, 0, &args);
 
+    if (mpi_rank == 0) {
+        std::cout << "inputpath = " << args.inputpath << "\n";
+        std::cout << "headerpath = " << args.headerpath << "\n";
+        std::cout << "outputpath = " << args.outputpath << "\n";
+        std::cout << "taskid = " << args.taskid << "\n";
+        std::cout << "verbose = " << args.verbose << "\n";
+        std::cout << "startk = " << args.startk << "\n";
+        std::cout << "endk = " << args.endk << "\n";
+    }
+
     const int k1 = args.startk;
     const int k2 = args.endk;
     assert(k1 <= k2);
@@ -694,6 +703,7 @@ int main(int argc, char** argv) {
 
     g.compute_truss();
     
+    std::cout << "Computed truss" << std::endl;
     // this has to be synced
 
     int largest_truss;
