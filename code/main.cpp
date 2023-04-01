@@ -524,8 +524,7 @@ void output_2(const graph_t& g, int k1, int k2) {
 
         if (F.merge(u, v)) {
             // send to 0 to add to 0's DSU
-            (mpi_rank == 0 ? spanning_forest : queued_edges)
-                .push_back(edge_t({u, v}));
+            if (mpi_rank != 0) queued_edges.push_back(edge_t({u, v}));
         }
     }
 
@@ -552,28 +551,26 @@ void output_2(const graph_t& g, int k1, int k2) {
 
     if (mpi_rank == 0) {
         for (auto [u, v] : edge_buffer) {
-            if (F.merge(u, v)) {
-                spanning_forest.push_back(edge_t({u, v}));
-            }
+            F.merge(u, v);
         }
     }
 
-    {
-        int spanning_forest_len = (int)spanning_forest.size();
-        MPI_Bcast(&spanning_forest_len, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        spanning_forest.resize(spanning_forest_len);
-        MPI_Bcast(spanning_forest.data(), spanning_forest_len, MPI_INT, 0,
-                  MPI_COMM_WORLD);
-        if (mpi_rank != 0)
-            for (auto [u, v] : spanning_forest) F.merge(u, v);
-    }
+    int F_len = (int)F.par_or_size.size();
+    MPI_Bcast(&F_len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    F.par_or_size.resize(F_len);
+    MPI_Bcast(F.par_or_size.data(), F_len, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // std::cout << "mpi_rank " << mpi_rank << ":\n";
+    // rep(u, 0, n) {
+    //     std::cout << u << " -> " << F.head(u) << "\n";
+    // }
 
     std::vector<std::string> grps(n);
     rep(u, 0, n) {
         if (F.size(u) > 1) grps[F.head(u)] += std::to_string(u) + " ";
     }
 
-    std::vector<bool> vis(n, false);
+    std::vector<bool> vis(n);
 
     MPI_File fh;
     MPI_File_open(MPI_COMM_WORLD, args.outputpath.data(),
@@ -583,7 +580,6 @@ void output_2(const graph_t& g, int k1, int k2) {
 
     int fst = (n + mpi_world_size - 1) / mpi_world_size * mpi_rank,
         lst = std::min((n + mpi_world_size - 1) / mpi_world_size * (mpi_rank + 1), n);
-    std::cout << "rank = " << mpi_rank << ", fst = " << fst << ", lst = " << lst << "\n";
     assert(fst <= n);
 
     std::vector<std::vector<int>> heads(lst-fst);
@@ -621,7 +617,7 @@ void output_2(const graph_t& g, int k1, int k2) {
 
     rep(u, fst, lst) {
         int i = u-fst;
-        if (heads[i].size() < args.p) continue;
+        if ((int)heads[i].size() < args.p) continue;
         buf.clear();
         buf += std::to_string(u) + " ";
         if (args.verbose) {
