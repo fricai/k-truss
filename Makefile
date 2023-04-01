@@ -12,5 +12,8 @@ endif
 main:
 	$(CC) $(CFLAGS) $(INCLUDES) code/main.cpp $(LDFLAGS) -o a3
 
+nosort:
+	$(CC) $(CFLAGS) $(INCLUDES) code/main_nosort.cpp $(LDFLAGS) -o a3_nosort
+
 clean:
 	rm a3
