@@ -1,0 +1,11 @@
+Task_id,1,1,2,2,1,2,1,2
+Metric,Speedup,Efficiency,Speedup,Efficiency,Iso-efficiency,Iso-efficiency,Sequential Fraction,Sequential Fraction
+"nodes = 2, thread = 2",,,,,,,,
+"nodes = 2, thread = 4",,,,,,,,
+"nodes = 2, thread = 8",,,,,,,,
+"nodes = 4, thread = 2",,,,,,,,
+"nodes = 4, thread = 4",,,,,,,,
+"nodes = 4, thread = 8",,,,,,,,
+"nodes = 8, thread = 2",,,,,,,,
+"nodes = 8, thread = 4",,,,,,,,
+"nodes = 8, thread = 8",,,,,,,,

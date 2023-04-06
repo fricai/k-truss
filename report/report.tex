@@ -1,0 +1,132 @@
+\documentclass[12pt]{article}
+\usepackage[a4paper,margin=0.75in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[OT1]{fontenc}
+\usepackage[table,usenames,dvipsnames]{xcolor}
+\usepackage{array}
+\usepackage{varwidth}
+\usepackage{tabularx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{tcolorbox}
+\usepackage{forest}
+\usepackage{multirow}
+\usepackage{parskip}
+\renewcommand*\familydefault{\sfdefault}
+
+\newtcolorbox{mybox}[3][]
+{
+  colframe = #2!25,
+  colback  = #2!10,
+  coltitle = #2!20!black,  
+  title    = {#3},
+  #1,
+}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    %pdfpagemode=FullScreen,
+}
+
+\title{\textbf{COL380 Assignment 3}}
+\author{%
+    \begin{tabular}{c}Aniruddha Deb \\ \texttt{2020CS10869}\end{tabular} \and%
+    \begin{tabular}{c}Rishabh Dhiman \\ \texttt{2020CS10837}\end{tabular} %
+}
+\date{April 2023}
+
+\begin{document}
+
+\maketitle
+
+\section*{Task 1}
+
+\subsection*{Approach}
+
+\subsection*{Results}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.45\textwidth]{speedup_t1.pdf}
+    \includegraphics[width=0.45\textwidth]{efficiency_t1.pdf}
+\end{figure}
+
+\begin{table}[!htbp]
+    \centering
+\begin{tabular}{|c|c|c|c|}
+    \hline
+    nodes & threads & speedup & efficiency \\
+
+    \hline
+    \multirow{3}{*}{2}
+    & 2 & 2.943 & 0.736 \\
+    & 4 & 3.289 & 0.411 \\
+    & 8 & 7.585 & 0.474 \\
+
+    \hline
+    \multirow{3}{*}{4}
+    & 2 & 4.061 & 0.508 \\
+    & 4 & 5.957 & 0.372 \\
+    & 8 & 10.795 & 0.337 \\
+
+    \hline
+    \multirow{3}{*}{8}
+    & 2 & 7.101 & 0.444 \\
+    & 4 & 9.872 & 0.309 \\
+    & 8 & 13.021 & 0.203 \\
+    \hline
+\end{tabular}
+\end{table}
+
+\subsection*{Isoefficiency and Sequential Fraction Estimation}
+
+\section*{Task 2}
+
+\subsection*{Approach}
+
+\subsection*{Results}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.45\textwidth]{speedup_t2.pdf}
+    \includegraphics[width=0.45\textwidth]{efficiency_t2.pdf}
+\end{figure}
+
+\begin{table}[!htbp]
+    \centering
+\begin{tabular}{|c|c|c|c|}
+    \hline
+    nodes & threads & speedup & efficiency \\
+
+    \hline
+    \multirow{3}{*}{2}
+    & 2 & 2.914 & 0.729 \\
+    & 4 & 3.510 & 0.439 \\
+    & 8 & 7.298 & 0.456 \\
+
+    \hline
+    \multirow{3}{*}{4}
+    & 2 & 4.216 & 0.527 \\
+    & 4 & 6.085 & 0.380 \\
+    & 8 & 3.828 & 0.120 \\
+
+    \hline
+    \multirow{3}{*}{8}
+    & 2 & 6.676 & 0.417 \\
+    & 4 & 10.342 & 0.323 \\
+    & 8 & 12.546 & 0.196 \\
+    \hline
+\end{tabular}
+\end{table}
+
+\subsection*{Isoefficiency and Sequential Fraction Estimation}
+
+\section*{References}
+
+
+\end{document}
