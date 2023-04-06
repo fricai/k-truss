@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex 2023.3.9)  6 APR 2023 19:33
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex 2023.3.9)  6 APR 2023 21:30
 entering extended mode
  \write18 enabled.
  file:line:error style messages enabled.
@@ -607,31 +607,51 @@ Package: multirow 2021/03/15 v2.8 Span multiple rows of a table
 \multirow@cntb=\count343
 \multirow@dima=\skip58
 \bigstrutjot=\dimen284
+) (/usr/local/texlive/2022/texmf-dist/tex/latex/algorithmicx/algpseudocode.sty
+Package: algpseudocode 
+ (/usr/local/texlive/2022/texmf-dist/tex/latex/base/ifthen.sty
+Package: ifthen 2020/11/24 v1.1c Standard LaTeX ifthen package (DPC)
+) (/usr/local/texlive/2022/texmf-dist/tex/latex/algorithmicx/algorithmicx.sty
+Package: algorithmicx 2005/04/27 v1.2 Algorithmicx
+
+Document Style algorithmicx 1.2 - a greatly improved `algorithmic' style
+\c@ALG@line=\count344
+\c@ALG@rem=\count345
+\c@ALG@nested=\count346
+\ALG@tlm=\skip59
+\ALG@thistlm=\skip60
+\c@ALG@Lnr=\count347
+\c@ALG@blocknr=\count348
+\c@ALG@storecount=\count349
+\c@ALG@tmpcounter=\count350
+\ALG@tmplength=\skip61
+)
+Document Style - pseudocode environments for use with the `algorithmicx' style
 ) (/usr/local/texlive/2022/texmf-dist/tex/latex/parskip/parskip.sty
 Package: parskip 2021-03-14 v2.0h non-zero parskip adjustments
 )
-Package hyperref Info: Option `colorlinks' set `true' on input line 34.
+Package hyperref Info: Option `colorlinks' set `true' on input line 35.
  (./report.aux)
 \openout1 = `report.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 43.
-LaTeX Font Info:    ... okay on input line 43.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
@@ -669,16 +689,16 @@ LaTeX Font Info:    ... okay on input line 43.
 
 (/usr/local/texlive/2022/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count344
+\scratchcounter=\count351
 \scratchdimen=\dimen285
 \scratchbox=\box97
-\nofMPsegments=\count345
-\nofMParguments=\count346
+\nofMPsegments=\count352
+\nofMParguments=\count353
 \everyMPshowfont=\toks57
-\MPscratchCnt=\count347
+\MPscratchCnt=\count354
 \MPscratchDim=\dimen286
-\MPnumerator=\count348
-\makeMPintoPDFobject=\count349
+\MPnumerator=\count355
+\makeMPintoPDFobject=\count356
 \everyMPtoPDFconversion=\toks58
 ) (/usr/local/texlive/2022/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
@@ -686,7 +706,7 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 48
  (/usr/local/texlive/2022/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 ))
-Package hyperref Info: Link coloring ON on input line 43.
+Package hyperref Info: Link coloring ON on input line 44.
  (/usr/local/texlive/2022/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2021-04-02 v2.47 Cross-referencing by name of section
  (/usr/local/texlive/2022/texmf-dist/tex/latex/refcount/refcount.sty
@@ -694,54 +714,59 @@ Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
 ) (/usr/local/texlive/2022/texmf-dist/tex/generic/gettitlestring/gettitlestring.sty
 Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
-\c@section@level=\count350
+\c@section@level=\count357
 )
-LaTeX Info: Redefining \ref on input line 43.
-LaTeX Info: Redefining \pageref on input line 43.
-LaTeX Info: Redefining \nameref on input line 43.
+LaTeX Info: Redefining \ref on input line 44.
+LaTeX Info: Redefining \pageref on input line 44.
+LaTeX Info: Redefining \nameref on input line 44.
  (./report.out) (./report.out)
 \@outlinefile=\write5
 \openout5 = `report.out'.
 
-<speedup_t1.pdf, id=7, 462.52798pt x 346.89601pt>
-File: speedup_t1.pdf Graphic file (type pdf)
-<use speedup_t1.pdf>
-Package pdftex.def Info: speedup_t1.pdf  used on input line 55.
-(pdftex.def)             Requested size: 220.09479pt x 165.07373pt.
-<efficiency_t1.pdf, id=8, 462.52798pt x 346.89601pt>
-File: efficiency_t1.pdf Graphic file (type pdf)
-<use efficiency_t1.pdf>
-Package pdftex.def Info: efficiency_t1.pdf  used on input line 56.
-(pdftex.def)             Requested size: 220.09479pt x 165.07373pt.
-<speedup_t2.pdf, id=9, 462.52798pt x 346.89601pt>
-File: speedup_t2.pdf Graphic file (type pdf)
-<use speedup_t2.pdf>
-Package pdftex.def Info: speedup_t2.pdf  used on input line 96.
-(pdftex.def)             Requested size: 220.09479pt x 165.07373pt.
-<efficiency_t2.pdf, id=10, 462.52798pt x 346.89601pt>
-File: efficiency_t2.pdf Graphic file (type pdf)
-<use efficiency_t2.pdf>
-Package pdftex.def Info: efficiency_t2.pdf  used on input line 97.
-(pdftex.def)             Requested size: 220.09479pt x 165.07373pt.
  [1
 
-{/usr/local/texlive/2022/texmf-var/fonts/map/pdftex/updmap/pdftex.map} <./speedup_t1.pdf> <./efficiency_t1.pdf>] [2 <./speedup_t2.pdf> <./efficiency_t2.pdf>] (./report.aux)
+{/usr/local/texlive/2022/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
+<speedup_t1.pdf, id=27, 462.52798pt x 346.89601pt>
+File: speedup_t1.pdf Graphic file (type pdf)
+<use speedup_t1.pdf>
+Package pdftex.def Info: speedup_t1.pdf  used on input line 108.
+(pdftex.def)             Requested size: 234.76729pt x 176.0783pt.
+<efficiency_t1.pdf, id=28, 462.52798pt x 346.89601pt>
+File: efficiency_t1.pdf Graphic file (type pdf)
+<use efficiency_t1.pdf>
+Package pdftex.def Info: efficiency_t1.pdf  used on input line 109.
+(pdftex.def)             Requested size: 234.76729pt x 176.0783pt.
+ [2 <./speedup_t1.pdf> <./efficiency_t1.pdf>]
+<speedup_t2.pdf, id=108, 462.52798pt x 346.89601pt>
+File: speedup_t2.pdf Graphic file (type pdf)
+<use speedup_t2.pdf>
+Package pdftex.def Info: speedup_t2.pdf  used on input line 184.
+(pdftex.def)             Requested size: 234.76729pt x 176.0783pt.
+<efficiency_t2.pdf, id=109, 462.52798pt x 346.89601pt>
+File: efficiency_t2.pdf Graphic file (type pdf)
+<use efficiency_t2.pdf>
+Package pdftex.def Info: efficiency_t2.pdf  used on input line 185.
+(pdftex.def)             Requested size: 234.76729pt x 176.0783pt.
+ [3 <./speedup_t2.pdf> <./efficiency_t2.pdf>]
+LaTeX Font Info:    Font shape `OT1/cmss/m/it' in size <12> not available
+(Font)              Font shape `OT1/cmss/m/sl' tried instead on input line 225.
+ [4] (./report.aux)
 Package rerunfilecheck Info: File `report.out' has not changed.
 (rerunfilecheck)             Checksum: D41D8CD98F00B204E9800998ECF8427E;0.
  ) 
 Here is how much of TeX's memory you used:
- 32572 strings out of 478268
- 727363 string characters out of 5846348
- 1030865 words of memory out of 5000000
- 50329 multiletter control sequences out of 15000+600000
- 476310 words of font info for 53 fonts, out of 8000000 for 9000
+ 33171 strings out of 478268
+ 736822 string characters out of 5846348
+ 1037936 words of memory out of 5000000
+ 50906 multiletter control sequences out of 15000+600000
+ 477868 words of font info for 58 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 83i,14n,80p,1603b,327s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmss12.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmssbx10.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb>
-Output written on report.pdf (2 pages, 76060 bytes).
+ 83i,14n,80p,1603b,323s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmss10.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmss12.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmssbx10.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi12.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/2022/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb>
+Output written on report.pdf (4 pages, 179830 bytes).
 PDF statistics:
- 188 PDF objects out of 1000 (max. 8388607)
- 55 compressed objects within 1 object stream
- 12 named destinations out of 1000 (max. 500000)
+ 257 PDF objects out of 1000 (max. 8388607)
+ 101 compressed objects within 2 object streams
+ 21 named destinations out of 1000 (max. 500000)
  33 words of extra memory for PDF output out of 10000 (max. 10000000)
 
