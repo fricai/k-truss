@@ -6,11 +6,8 @@
 
 #include <algorithm>
 #include <cassert>
-#include <chrono>
-#include <execution>
 #include <iostream>
 #include <numeric>
-#include <thread>
 #include <vector>
 
 #include "argparse.hpp"
@@ -78,6 +75,9 @@ void graph_t::compute_truss() {
     std::vector<std::vector<int>> cnt2, off2;
 
     std::vector<int8_t> responses, answers;
+
+    const int num_t = omp_get_max_threads();
+    std::vector tr(actors, std::vector<std::vector<triangle_t>>(num_t));
 
     for (int k = k1; k <= k2; ++k) {
         while (true) {
@@ -229,29 +229,23 @@ void graph_t::compute_truss() {
                           recv_buffer.data(), recv_cnts.data(),
                           recv_offsets.data(), mpi_array_int_3, MPI_COMM_WORLD);
 
-            // Can I parallelize this?
-            std::sort(recv_buffer.begin(), recv_buffer.end(),
-                      [&](const auto& a, const auto& b) {
-                          return owner_actor[a[0]] < owner_actor[b[0]];
-                      });
-
-            std::vector<int> actor_offsets(actors + 1, 0);
-#pragma omp parallel for schedule(dynamic, 1)
-            rep(i, 0, actors) {
-                // I want first element with owner > i
-                actor_offsets[i + 1] =
-                    std::lower_bound(recv_buffer.begin(), recv_buffer.end(), i,
-                                     [&](const auto& a, int x) {
-                                         return owner_actor[a[0]] <= x;
-                                     }) -
-                    recv_buffer.begin();
+            {
+                const int len = (int)recv_buffer.size();
+#pragma omp parallel for
+                rep(i, 0, len) {
+                    const auto tid = omp_get_thread_num();
+                    const auto o = owner_actor[recv_buffer[i][0]];
+                    tr[o][tid].push_back(recv_buffer[i]);
+                }
             }
 
 #pragma omp parallel for schedule(dynamic, 1)
-            rep(i, 0, actors) {
-                rep(j, actor_offsets[i], actor_offsets[i + 1]) {
-                    const auto [p, q, r] = recv_buffer[j];
-                    update_triangle(p, q, r);
+            rep(o, 0, actors) {
+                rep(tid, 0, num_t) {
+                    for (auto [p, q, r] : tr[o][tid]) {
+                        update_triangle(p, q, r);
+                    }
+                    tr[o][tid].clear();
                 }
             }
 
@@ -383,8 +377,6 @@ void graph_t::read_owned_graph() {
             const auto v = nbh[i];
             if (rnk[u] < rnk[v]) dodg[u].push_back(v);
         }
-
-        assert(std::is_sorted(dodg[u].begin(), dodg[u].end()));
     }
 }
 
@@ -465,30 +457,30 @@ void graph_t::init_triangles() {
     clear_vector(send_triangles);
 
     // Would want to parallelize this
-    std::sort(recv_triangles.begin(), recv_triangles.end(),
-              [&](const auto& a, const auto& b) {
-                  return owner_actor[a[0]] < owner_actor[b[0]];
-              });
 
-    // Note the best way of doing things :/
+    const int num_t = omp_get_max_threads();
+    std::vector tr(actors, std::vector<std::vector<triangle_t>>(num_t));
 
-    std::vector<int> actor_offsets(actors + 1, 0);
-#pragma omp parallel for schedule(dynamic, 1)
-    rep(i, 0, actors) {
-        // I want first element with owner > i
-        actor_offsets[i + 1] =
-            std::lower_bound(
-                recv_triangles.begin(), recv_triangles.end(), i,
-                [&](const auto& a, int x) { return owner_actor[a[0]] <= x; }) -
-            recv_triangles.begin();
+    {
+        const int len = (int)recv_triangles.size();
+#pragma omp parallel for
+        rep(i, 0, len) {
+            const int tid = omp_get_thread_num();
+            const int o = owner_actor[recv_triangles[i][0]];
+            tr[o][tid].push_back(recv_triangles[i]);
+        }
+
+        clear_vector(recv_triangles);
     }
 
 #pragma omp parallel for schedule(dynamic, 1)
-    rep(i, 0, actors) {
-        rep(j, actor_offsets[i], actor_offsets[i + 1]) {
-            const auto [q, r, p] = recv_triangles[j];
-            const auto idx_r = get_edge_idx(q, r);
-            inc_tri[q][idx_r].push_back(p);
+    rep(o, 0, actors) {
+        rep(tid, 0, num_t) {
+            for (auto [q, r, p] : tr[o][tid]) {
+                const auto idx_r = get_edge_idx(q, r);
+                inc_tri[q][idx_r].push_back(p);
+            }
+            clear_vector(tr[o][tid]);
         }
     }
 
@@ -497,11 +489,6 @@ void graph_t::init_triangles() {
         for (auto p : actor_owned_vertices[i]) {
             rep(idx, 0u, inc_tri[p].size()) {
                 std::sort(inc_tri[p][idx].begin(), inc_tri[p][idx].end());
-                // inc_tri[p][idx].shrink_to_fit();
-                /*
-                 * Should I keep this or not?
-                 */
-
                 supp[p][idx] = (int)inc_tri[p][idx].size();
             }
         }
@@ -733,7 +720,12 @@ int main(int argc, char** argv) {
 
     argp_parse(&argp, argc, argv, 0, 0, &args);
 
+#pragma omp parallel for
+    for (int i=0; i<1; i++)
+        std::cout << "omp_num_threads (rank " << mpi_rank << ") = " << omp_get_num_threads() << "\n";
+
     if (mpi_rank == 0) {
+        std::cout << "mpi_world_size = " << mpi_world_size << "\n";
         std::cout << "inputpath = " << args.inputpath << "\n";
         std::cout << "headerpath = " << args.headerpath << "\n";
         std::cout << "outputpath = " << args.outputpath << "\n";
@@ -754,7 +746,7 @@ int main(int argc, char** argv) {
     g.init();
 
     g.compute_truss();
-   
+
     // this has to be synced
 
     int largest_truss;
